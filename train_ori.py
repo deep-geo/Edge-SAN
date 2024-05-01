@@ -5,7 +5,7 @@ import argparse
 import os
 from torch import optim
 from torch.utils.data import DataLoader
-from DataLoader_updated import TrainingDataset, stack_dict_batched
+from DataLoader import TrainingDataset, stack_dict_batched
 from utils import FocalDiceloss_IoULoss, get_logger, generate_point, setting_prompt_none
 from metrics import SegMetrics
 import time
@@ -13,7 +13,7 @@ from tqdm import tqdm
 import numpy as np
 import datetime
 from torch.nn import functional as F
-# from apex import amp
+#from apex import amp
 import random
 
 
@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument("--batch_size", type=int, default=2, help="train batch size")
     parser.add_argument("--image_size", type=int, default=256, help="image_size")
     parser.add_argument("--mask_num", type=int, default=5, help="get mask number")
-    parser.add_argument("--data_path", type=str, default="fluorescence", help="train data path")
+    parser.add_argument("--data_path", type=str, default="data_demo", help="train data path") 
     parser.add_argument("--metrics", nargs='+', default=['iou', 'dice'], help="metrics")
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument("--lr", type=float, default=1e-4, help="learning rate")
@@ -41,7 +41,6 @@ def parse_args():
     args = parser.parse_args()
     if args.resume is not None:
         args.sam_checkpoint = None
-
     return args
 
 
@@ -58,20 +57,6 @@ def to_device(batch_input, device):
         else:
             device_input[key] = value
     return device_input
-
-# def to_device(batch_input, device):
-#     device_input = {}
-#     for key, value in batch_input.items():
-#         if value is not None:
-#             if isinstance(value, torch.Tensor):
-#                 device_input[key] = value.float().to(device)  # Convert to FloatTensor if using float
-#                 # Use value.half().to(device) if using half precision
-#             else:
-#                 device_input[key] = value  # Handle non-tensor data without conversion
-#         else:
-#             device_input[key] = value
-#     return device_input
-
 
 
 def prompt_and_decoder(args, batched_input, model, image_embeddings, decoder_iter = False):
@@ -137,38 +122,38 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
                 else:
                     value.requires_grad = False
 
-            # if args.use_amp:
-            #     labels = batched_input["label"].half()
-            #     image_embeddings = model.image_encoder(batched_input["image"].half())
-            #
-            #     batch, _, _, _ = image_embeddings.shape
-            #     image_embeddings_repeat = []
-            #     for i in range(batch):
-            #         image_embed = image_embeddings[i]
-            #         image_embed = image_embed.repeat(args.mask_num, 1, 1, 1)
-            #         image_embeddings_repeat.append(image_embed)
-            #     image_embeddings = torch.cat(image_embeddings_repeat, dim=0)
-            #
-            #     masks, low_res_masks, iou_predictions = prompt_and_decoder(args, batched_input, model, image_embeddings, decoder_iter = False)
-            #     loss = criterion(masks, labels, iou_predictions)
-            #     with amp.scale_loss(loss, optimizer) as scaled_loss:
-            #         scaled_loss.backward(retain_graph=False)
-            #
-            # else:
-            labels = batched_input["label"]
-            image_embeddings = model.image_encoder(batched_input["image"]  #.to(torch.half))
+            if args.use_amp:
+                labels = batched_input["label"].half()
+                image_embeddings = model.image_encoder(batched_input["image"].half())
+      
+                batch, _, _, _ = image_embeddings.shape
+                image_embeddings_repeat = []
+                for i in range(batch):
+                    image_embed = image_embeddings[i]
+                    image_embed = image_embed.repeat(args.mask_num, 1, 1, 1)
+                    image_embeddings_repeat.append(image_embed)
+                image_embeddings = torch.cat(image_embeddings_repeat, dim=0)
 
-            batch, _, _, _ = image_embeddings.shape
-            image_embeddings_repeat = []
-            for i in range(batch):
-                image_embed = image_embeddings[i]
-                image_embed = image_embed.repeat(args.mask_num, 1, 1, 1)
-                image_embeddings_repeat.append(image_embed)
-            image_embeddings = torch.cat(image_embeddings_repeat, dim=0)
+                masks, low_res_masks, iou_predictions = prompt_and_decoder(args, batched_input, model, image_embeddings, decoder_iter = False)
+                loss = criterion(masks, labels, iou_predictions)
+                with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    scaled_loss.backward(retain_graph=False)
 
-            masks, low_res_masks, iou_predictions = prompt_and_decoder(args, batched_input, model, image_embeddings, decoder_iter = False)
-            loss = criterion(masks, labels, iou_predictions)
-            loss.backward(retain_graph=False)
+            else:
+                labels = batched_input["label"]
+                image_embeddings = model.image_encoder(batched_input["image"])
+
+                batch, _, _, _ = image_embeddings.shape
+                image_embeddings_repeat = []
+                for i in range(batch):
+                    image_embed = image_embeddings[i]
+                    image_embed = image_embed.repeat(args.mask_num, 1, 1, 1)
+                    image_embeddings_repeat.append(image_embed)
+                image_embeddings = torch.cat(image_embeddings_repeat, dim=0)
+
+                masks, low_res_masks, iou_predictions = prompt_and_decoder(args, batched_input, model, image_embeddings, decoder_iter = False)
+                loss = criterion(masks, labels, iou_predictions)
+                loss.backward(retain_graph=False)
 
             optimizer.step()
             optimizer.zero_grad()
@@ -192,15 +177,15 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
                 if iter == init_mask_num or iter == args.iter_point - 1:
                     batched_input = setting_prompt_none(batched_input)
 
-                # if args.use_amp:
-                #     masks, low_res_masks, iou_predictions = prompt_and_decoder(args, batched_input, model, image_embeddings, decoder_iter=True)
-                #     loss = criterion(masks, labels, iou_predictions)
-                #     with amp.scale_loss(loss,  optimizer) as scaled_loss:
-                #         scaled_loss.backward(retain_graph=True)
-                # else:
-                masks, low_res_masks, iou_predictions = prompt_and_decoder(args, batched_input, model, image_embeddings, decoder_iter=True)
-                loss = criterion(masks, labels, iou_predictions)
-                loss.backward(retain_graph=True)
+                if args.use_amp:
+                    masks, low_res_masks, iou_predictions = prompt_and_decoder(args, batched_input, model, image_embeddings, decoder_iter=True)
+                    loss = criterion(masks, labels, iou_predictions)
+                    with amp.scale_loss(loss,  optimizer) as scaled_loss:
+                        scaled_loss.backward(retain_graph=True)
+                else:
+                    masks, low_res_masks, iou_predictions = prompt_and_decoder(args, batched_input, model, image_embeddings, decoder_iter=True)
+                    loss = criterion(masks, labels, iou_predictions)
+                    loss.backward(retain_graph=True)
                     
                 optimizer.step()
                 optimizer.zero_grad()
@@ -237,7 +222,6 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
 
 def main(args):
     model = sam_model_registry[args.model_type](args).to(args.device) 
-    #model = model.half()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     criterion = FocalDiceloss_IoULoss()
 
@@ -245,6 +229,7 @@ def main(args):
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10], gamma = 0.5)
         print('*******Use MultiStepLR')
 
+    # print(f"args.resume:{args.resume}")
     # if args.resume is not None:
     #     with open(args.resume, "rb") as f:
     #         checkpoint = torch.load(f)
@@ -252,14 +237,14 @@ def main(args):
     #         optimizer.load_state_dict(checkpoint['optimizer'].state_dict())
     #         print(f"*******load {args.resume}")
 
-    # if args.use_amp:
-    #     model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
-    #     print("*******Mixed precision with Apex")
-    # else:
-    #     print('*******Do not use mixed precision')
+    if args.use_amp:
+        model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+        print("*******Mixed precision with Apex")
+    else:
+        print('*******Do not use mixed precision')
 
     train_dataset = TrainingDataset(args.data_path, image_size=args.image_size, mode='train', point_num=1, mask_num=args.mask_num, requires_name = False)
-    train_loader = DataLoader(train_dataset, batch_size = args.batch_size, shuffle=True, num_workers=16)
+    train_loader = DataLoader(train_dataset, batch_size = args.batch_size, shuffle=True, num_workers=4)
     print('*******Train data:', len(train_dataset))   
 
     loggers = get_logger(os.path.join(args.work_dir, "logs", f"{args.run_name}_{datetime.datetime.now().strftime('%Y%m%d-%H%M.log')}"))
@@ -298,6 +283,7 @@ def main(args):
 
 if __name__ == '__main__':
     args = parse_args()
+    args.use_amp = False
     main(args)
 
 
