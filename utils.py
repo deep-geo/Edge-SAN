@@ -356,3 +356,46 @@ class FocalDiceloss_IoULoss(nn.Module):
         loss2 = self.maskiou_loss(pred, mask, pred_iou)
         loss = loss1 + loss2 * self.iou_scale
         return loss
+
+
+class BCE_Loss(nn.Module):
+
+    def __init__(self):
+        super(BCE_Loss, self).__init__()
+
+    def forward(self, pred, mask):
+        """
+        pred: [B, 1, H, W] - Predictions as logits
+        mask: [B, 1, H, W] - Ground truth masks
+        """
+        assert pred.shape == mask.shape, "pred and mask should have the same shape."
+        p = torch.sigmoid(pred)  # Apply sigmoid to convert logits to probabilities
+
+        # Compute binary cross-entropy loss
+        bce_loss = F.binary_cross_entropy(p, mask, reduction='mean')
+        return bce_loss
+
+
+class BCE_Diceloss_IoULoss(nn.Module):
+    
+    def __init__(self, weight=1.0, iou_scale=1.0):
+        super(FocalDiceloss_IoULoss, self).__init__()
+        self.weight = weight
+        self.iou_scale = iou_scale
+        self.bce_loss = BCE_Loss()
+        self.dice_loss = DiceLoss()
+        self.maskiou_loss = MaskIoULoss()
+
+    def forward(self, pred, mask, pred_iou):
+        """
+        pred: [B, 1, H, W]
+        mask: [B, 1, H, W]
+        """
+        assert pred.shape == mask.shape, "pred and mask should have the same shape."
+
+        BCE_loss = self.BCE_loss(pred, mask)
+        dice_loss =self.dice_loss(pred, mask)
+        loss1 = BCE_loss + dice_loss
+        #loss2 = self.maskiou_loss(pred, mask, pred_iou)
+        #loss = loss1 #+ loss2 * self.iou_scale
+        return loss1
