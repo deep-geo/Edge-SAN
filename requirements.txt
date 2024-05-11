@@ -1,0 +1,9 @@
+# Python version: 3.10
+numpy
+opencv-python
+torch
+torchvision
+albumentations
+tqdm
+matplotlib
+wandb
