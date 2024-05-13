@@ -2,33 +2,39 @@
 Script for thyroid dataset preprocessing.
 
 Original dataset structure:
-| - thyroid/
-    | - test/
-        | - bound/
-            | - <image0>.png
-            | - <image1>.png
-            ...
-        | - data/
-            | - <image0>.png
-            | - <image1>.png
-            ...
-        | - label/
-            | - <image0>.png
-            | - <image1>.png
-            ...
-    | - train/
-        | - bound/
-            | - <image0>.png
-            | - <image1>.png
-            ...
-        | - data/
-            | - <image0>.png
-            | - <image1>.png
-            ...
-        | - label/
-            | - <image0>.png
-            | - <image1>.png
-            ...
+.
+├── test
+│   ├── bound
+│   │   ├── consep_1.png
+│   │   ├── consep_11.png
+│   │   ├── consep_14.png
+│   │   ...
+│   ├── data
+│   │   ├── consep_1.png
+│   │   ├── consep_11.png
+│   │   ├── consep_14.png
+│   │   ...
+│   └── label
+│       ├── consep_1.png
+│       ├── consep_11.png
+│       ├── consep_14.png
+│       ...
+└── train
+    ├── bound
+    │   ├── consep_2.png
+    │   ├── consep_3.png
+    │   ├── consep_4.png
+    │   ...
+    ├── data
+    │   ├── consep_2.png
+    │   ├── consep_3.png
+    │   ├── consep_4.png
+    │   ...
+    └── label
+        ├── consep_2.png
+        ├── consep_3.png
+        ├── consep_4.png
+        ...
 """
 import os
 import glob

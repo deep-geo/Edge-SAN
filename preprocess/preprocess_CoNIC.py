@@ -1,12 +1,12 @@
 """
-Script for thyroid dataset preprocessing.
+Script for CoNIC dataset preprocessing.
 
 Original dataset structure:
-| - CoNIC/
-    | - images.npy
-    | - labels.npy
-    | - patch_info.csv
-    | - README.txt
+.
+├── README.txt
+├── images.npy
+├── labels.npy
+└── patch_info.csv
 
 """
 import os

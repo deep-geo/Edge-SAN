@@ -1,16 +1,18 @@
 """
-Script for thyroid dataset preprocessing.
+Script for histology dataset preprocessing.
 
 Original dataset structure:
-| - histology/
-    | - data/
-        | - <image0>.png
-        | - <image1>.png
-        ...
-    | - label/
-        | - <image0>.png
-        | - <image1>.png
-        ...
+.
+├── data
+│   ├── 0TCGA-21-5784-01Z-00-DX1.png
+│   ├── 0TCGA-21-5786-01Z-00-DX1.png
+│   ├── 0TCGA-2Z-A9J9-01A-01-TS1.png
+│   ...
+└── label
+    ├── 0TCGA-21-5784-01Z-00-DX1.png
+    ├── 0TCGA-21-5786-01Z-00-DX1.png
+    ├── 0TCGA-2Z-A9J9-01A-01-TS1.png
+    ...
 """
 import os
 import glob

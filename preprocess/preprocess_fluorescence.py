@@ -2,15 +2,17 @@
 Script for fluorescence dataset preprocessing.
 
 Original dataset structure:
-| - fluorescence/
-    | - data/
-        | - <image0>.png
-        | - <image1>.png
-        ...
-    | - label/
-        | - <image0>.png
-        | - <image1>.png
-        ...
+.
+├── data
+│   ├── image0.png
+│   ├── image1.png
+│   ├── image2.png
+│   ...
+└── label
+    ├── image0.png
+    ├── image1.png
+    ├── image2.png
+    ...
 """
 import os
 import glob
