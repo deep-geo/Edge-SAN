@@ -17,16 +17,13 @@ class Preprocess:
         self.src_root = src_root
 
         self.dst_root = dst_root
-        if os.path.exists(dst_root):
-            assert not glob.glob(os.path.join(dst_root, "*")), \
-                f"The dst_root is supposed to be empty: {dst_root}"
-
         self.dst_data_dir = os.path.join(self.dst_root, "data")
         self.dst_label_dir = os.path.join(self.dst_root, "label")
-        os.makedirs(self.dst_data_dir)
-        os.makedirs(self.dst_label_dir)
+        os.makedirs(self.dst_data_dir, exist_ok=True)
+        os.makedirs(self.dst_label_dir, exist_ok=True)
 
         self.dst_size = int(dst_size)
+
         self.dst_prefix = "" if dst_prefix is None else dst_prefix.strip()
         self.dst_prefix = self.dst_prefix + "_" if self.dst_prefix else self.dst_prefix
 
