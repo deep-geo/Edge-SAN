@@ -8,6 +8,9 @@ from typing import List
 
 
 def split_dataset(data_root: str, ext: str, test_size: float, seed: int):
+    split_path = os.path.join(data_root, "split.json")
+    assert not os.path.exists(split_path), f"The split file exists already: {split_path}"
+
     if ext.startswith("."):
         ext = ext[1:]
 
@@ -57,7 +60,7 @@ def split_dataset(data_root: str, ext: str, test_size: float, seed: int):
         "train": [(dp, lp) for dp, lp in zip(train_data_paths, train_label_paths)],
         "test": [(dp, lp) for dp, lp in zip(test_data_paths, test_label_paths)]
     }
-    split_path = os.path.join(data_root, f"split_{seed}.json")
+
     with open(split_path, "w") as f:
         json.dump(split_json, f, indent=2)
 
