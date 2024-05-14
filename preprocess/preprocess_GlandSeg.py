@@ -92,11 +92,5 @@ if __name__ == "__main__":
     parser.add_argument("--dst_prefix", type=str, default="")
     args = parser.parse_args()
 
-    # PreprocessGlandSeg(args.src_root, args.dst_root,
-    #                    args.dst_size, args.dst_prefix).process()
-    PreprocessGlandSeg(
-        "/Users/zhaojq/Datasets/SAM_nuclei/GlandSeg/Warwick_QU_Dataset",
-        "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/GlandSeg/",
-        256,
-        "GlandSeg"
-    ).process()
+    PreprocessGlandSeg(args.src_root, args.dst_root,
+                       args.dst_size, args.dst_prefix).process()
