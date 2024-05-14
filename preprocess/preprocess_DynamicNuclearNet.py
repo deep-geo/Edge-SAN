@@ -100,10 +100,3 @@ if __name__ == "__main__":
 
     PreprocessDynamicNuclearNet(args.src_root, args.dst_root,
                                 args.dst_size, args.dst_prefix).process()
-
-    # PreprocessDynamicNuclearNet(
-    #     "/Users/zhaojq/Datasets/SAM_nuclei/DynamicNuclearNet/DynamicNuclearNet-segmentation-v1_0",
-    #     "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/DynamicNuclearNet",
-    #     256,
-    #     "DynamicNuclearNet"
-    # ).process()

@@ -39,6 +39,12 @@ dst_prefix="DynamicNuclearNet"
 echo -e "\n################# PROCESS DynamicNuclearNet #################"
 python preprocess_DynamicNuclearNet.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix
 
+# lizard
+src_root="<path_to_lizard_src_root>"
+dst_prefix="lizard"
+echo -e "\n################# PROCESS lizard #################"
+python preprocess_lizard.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix
+
 
 # split dataset
 echo -e "\n>>>>>>>>>>>>>>>>>>>>> Split Datasets <<<<<<<<<<<<<<<<<<<<<<"
