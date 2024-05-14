@@ -57,7 +57,7 @@ class PreprocessGlandSeg(Preprocess):
             random.shuffle(vals)
             val_groups = [vals[i:i + 255] for i in range(0, len(vals), 255)]
             for j, group in enumerate(val_groups):
-                step = self.calc_step(len(vals))
+                step = self.calc_step(len(group))
                 dst_label = np.zeros(
                     shape=(src_label.shape[0], src_label.shape[1]),
                     dtype=np.uint8
