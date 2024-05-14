@@ -9,7 +9,6 @@ from typing import List
 
 def split_dataset(data_root: str, ext: str, test_size: float, seed: int):
     split_path = os.path.join(data_root, "split.json")
-    assert not os.path.exists(split_path), f"The split file exists already: {split_path}"
 
     if ext.startswith("."):
         ext = ext[1:]

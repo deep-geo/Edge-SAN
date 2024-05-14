@@ -19,9 +19,6 @@ import random
 from preprocess import Preprocess
 
 
-STEP = 20
-
-
 class PreprocessCoNIC(Preprocess):
 
     def process(self):

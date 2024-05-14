@@ -26,3 +26,13 @@ src_root="<path_to_thyroid_src_root>"
 dst_prefix="thyroid"
 echo "################# PROCESS thyroid #################"
 python preprocess_thyroid.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix
+
+# GlandSeg
+src_root="<path_to_GlandSeg_src_root>"
+dst_prefix="GlandSeg"
+echo "################# PROCESS GlandSeg #################"
+python preprocess_GlandSeg.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix
+
+# split dataset
+echo ">>>>>>>>>>>>>>>>>>>>> Split Datasets <<<<<<<<<<<<<<<<<<<<<<"
+python split_dataset.py --data_root $dst_root --ext "png" --test_size 0.05 --seed 42
