@@ -2,16 +2,14 @@
 
 python train.py \
 --work_dir "workdir" \
---run_name "<run_name>" \
+--run_name "nuclei-051701" \
+--seed 42 \
 --epochs 100000 \
 --batch_size 8 \
 --num_workers 8 \
 --image_size 256 \
 --mask_num 5 \
---split_paths \
-  "<split_path_0>" \
-  "<split_path_1>" \
-  "<split_path_2>" \
+--split_paths "/root/autodl-tmp/datasets/SAM_nuclei_preprocessed/ALL/split.json" \
 --metrics 'iou' 'dice' 'precision' 'f1_score' 'recall' 'specificity' 'accuracy' 'hausdorff_distance' \
 --device "cuda" \
 --lr 0.0001 \

@@ -28,6 +28,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--work_dir", type=str, default="workdir", help="work dir")
     parser.add_argument("--run_name", type=str, default=f"run-{str(datetime.datetime.now())[:19].replace(' ', '_').replace(':', '-')}", help="run model name")
+    parser.add_argument("--seed", type=int, default=None, help="number of epochs")
     parser.add_argument("--epochs", type=int, default=100000, help="number of epochs")
     parser.add_argument("--batch_size", type=int, default=8, help="train batch size")
     parser.add_argument("--num_workers", type=int, default=8, help="Dataloader workers")
@@ -378,15 +379,20 @@ def main(args):
             optimizer.load_state_dict(checkpoint['optimizer'].state_dict())
             resume_epoch = checkpoint["epoch"]
 
-    params = ["epochs", "batch_size", "image_size", "mask_num", "lr",
+    params = ["seed", "epochs", "batch_size", "image_size", "mask_num", "lr",
               "resume", "model_type", "sam_checkpoint", "boxes_prompt",
               "point_num", "iter_point", "lr_scheduler", "point_list",
               "multimask", "encoder_adapter"]
     config = {p: getattr(args, p) for p in params}
     config["resume_checkpoint"] = resume_chkpt
+
+    run_name = f"{args.run_name}_{datetime.datetime.now().strftime('%m-%d_%H-%M')}"
+    if args.seed is not None:
+        random.seed(args.seed)
+
     wandb.init(
         project="SAM_Nuclei",
-        name=args.run_name,
+        name=run_name,
         config=config
     )
 
