@@ -40,7 +40,7 @@ def parse_args():
                                  'hausdorff_distance'], help="metrics")
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument("--lr", type=float, default=1e-4, help="learning rate")
-    parser.add_argument("--resume", type=str, default=None, help="checkpoint to resume")
+    parser.add_argument("--resume", type=str, default=None, help="checkpoint or run_name to resume")
     parser.add_argument("--model_type", type=str, default="vit_b", help="sam model_type")
     parser.add_argument("--sam_checkpoint", type=str, default="pretrain_model/sam-med2d_b.pth", help="sam checkpoint")
     parser.add_argument("--boxes_prompt", action='store_true', help="use boxes prompt")
@@ -351,6 +351,8 @@ def main(args):
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     criterion = FocalDiceloss_IoULoss()
 
+    args.run_name = f"{args.run_name}_{datetime.datetime.now().strftime('%m-%d_%H-%M')}"
+
     chkpt_dir = os.path.join(args.work_dir, "models", args.run_name)
     os.makedirs(chkpt_dir, exist_ok=True)
 
@@ -358,16 +360,18 @@ def main(args):
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10], gamma=0.5)
         print('*******Use MultiStepLR')
 
-    resume_chkpt = args.resume
-    if not resume_chkpt:
-        # try to find the last checkpoint
-        chkpts = sorted(
-            glob.glob(os.path.join(chkpt_dir, "*.pth")),
-            key=lambda p: float(
-                re.search(r"epoch(\d+)", os.path.basename(p)).group(1))
-        )
-        if chkpts:
-            resume_chkpt = chkpts[-1]
+    resume_chkpt = None
+    if args.resume:
+        if os.path.isfile(args.resume):
+            resume_chkpt = args.resume
+        else:   # dir
+            chkpts = sorted(
+                glob.glob(os.path.join(chkpt_dir, "*.pth")),
+                key=lambda p: float(
+                    re.search(r"epoch(\d+)", os.path.basename(p)).group(1))
+            )
+            if chkpts:
+                resume_chkpt = chkpts[-1]
 
     print("resume_chkpt: ", resume_chkpt)
 
@@ -385,16 +389,11 @@ def main(args):
               "multimask", "encoder_adapter"]
     config = {p: getattr(args, p) for p in params}
     config["resume_checkpoint"] = resume_chkpt
+    wandb.init(project="NucleiSAM", name=args.run_name, config=config)
 
-    run_name = f"{args.run_name}_{datetime.datetime.now().strftime('%m-%d_%H-%M')}"
+    # todo random seed
     if args.seed is not None:
         random.seed(args.seed)
-
-    wandb.init(
-        project="SAM_Nuclei",
-        name=run_name,
-        config=config
-    )
 
     train_dataset = TrainingDataset(split_paths=args.split_paths,
                                     point_num=1,  # todo 1?
