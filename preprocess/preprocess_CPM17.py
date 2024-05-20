@@ -37,15 +37,8 @@ Original dataset structure:
         ...
 """
 import os
-import glob
 import argparse
-import cv2
-import numpy as np
-import tqdm
-import random
 
-from preprocess import Preprocess
-from scipy.io import loadmat
 from preprocess_CPM15 import PreprocessCPM15
 
 

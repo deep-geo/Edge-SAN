@@ -77,8 +77,6 @@ class PreprocessLizard(Preprocess):
                 _, label = cv2.threshold(label, 200, 255,
                                          cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-                kernel = np.ones((3, 3), np.uint8)
-                sure_bg = cv2.dilate(label, kernel, iterations=3)
                 dist_transform = cv2.distanceTransform(label, cv2.DIST_L2, 5)
                 _, sure_fg = cv2.threshold(dist_transform, 0, 255, 0)
                 sure_fg = np.uint8(sure_fg)

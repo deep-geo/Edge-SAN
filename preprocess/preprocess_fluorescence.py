@@ -47,20 +47,31 @@ class PreprocessFluorescence(Preprocess):
         label_paths = glob.glob(os.path.join(src_label_dir, "*.png"))
         print("\nProcess label...")
         for path in tqdm.tqdm(label_paths):
-            src_label = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-            vals = [_ for _ in np.unique(src_label) if _ != 0]
-            step = self.calc_step(len(vals))
-            dst_label = np.zeros(shape=src_label.shape, dtype=np.uint8)
-            random.shuffle(vals)
-            for i, val in enumerate(vals):
-                dst_label[src_label == val] = 255 - i * step
+            label = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+            label = label.astype(np.uint16)    # keep the same data type with other datasets
 
-            dst_label = self.transform(dst_label)
+            dst_label_uint16 = self.transform(label)
 
-            label_name = os.path.basename(path)
-            dst_path = os.path.join(self.dst_label_dir,
-                                    self.dst_prefix + label_name)
-            cv2.imwrite(dst_path, dst_label)
+            basename = os.path.basename(path)[:-4]
+
+            # npy
+            dst_arr_path = os.path.join(self.dst_label_dir,
+                                        self.dst_prefix + f"{basename}.npy")
+            np.save(dst_arr_path, dst_label_uint16)
+
+            # png
+            vals_uint16 = [_ for _ in np.unique(dst_label_uint16) if _ != 0][:255]
+            dst_label_uint8 = np.zeros(shape=dst_label_uint16.shape,
+                                       dtype=np.uint8)
+            if len(vals_uint16) > 0:
+                random.shuffle(vals_uint16)
+                step = self.calc_step(len(vals_uint16))
+                for j, val in enumerate(vals_uint16):
+                    dst_label_uint8[dst_label_uint16 == val] = 255 - j * step
+
+            dst_img_path = os.path.join(self.dst_label_dir,
+                                        self.dst_prefix + f"{basename}.png")
+            cv2.imwrite(dst_img_path, dst_label_uint8)
 
 
 if __name__ == "__main__":

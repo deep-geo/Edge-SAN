@@ -2,12 +2,23 @@ import os
 import cv2
 import numpy as np
 import albumentations as A
-import glob
 
 from abc import abstractmethod
 
 
 STEP = 15
+
+
+def get_transform(dst_size: int, ori_h: int, ori_w: int):
+    if ori_h < dst_size and ori_w < dst_size:
+        t = A.PadIfNeeded(
+            min_height=dst_size, min_width=dst_size,
+            position="center", border_mode=cv2.BORDER_CONSTANT,
+            value=0
+        )
+    else:
+        t = A.Resize(dst_size, dst_size, interpolation=cv2.INTER_NEAREST)
+    return t
 
 
 class Preprocess:
@@ -28,18 +39,7 @@ class Preprocess:
         self.dst_prefix = self.dst_prefix + "_" if self.dst_prefix else self.dst_prefix
 
     def _get_transform(self, ori_h: int, ori_w: int):
-        if ori_h < self.dst_size and ori_w < self.dst_size:
-            t = A.PadIfNeeded(
-                min_height=self.dst_size, min_width=self.dst_size,
-                position="center", border_mode=cv2.BORDER_CONSTANT,
-                value=0
-            )
-        else:
-            t = A.Resize(
-                self.dst_size, self.dst_size,
-                interpolation=cv2.INTER_NEAREST
-            )
-        return t
+        return get_transform(self.dst_size, ori_h, ori_w)
 
     def transform(self, img: np.ndarray):
         # img shape: h * w * c

@@ -7,7 +7,7 @@ import argparse
 from typing import List
 
 
-def split_dataset(data_root: str, ext: str, test_size: float, seed: int):
+def split_dataset(data_root: str, ext: str, test_size: float, seed: int = None):
     split_path = os.path.join(data_root, "split.json")
 
     if ext.startswith("."):
@@ -40,7 +40,9 @@ def split_dataset(data_root: str, ext: str, test_size: float, seed: int):
         else:
             label_paths.append(label_lst)
 
-    random.seed(seed)
+    if seed is not None:
+        random.seed(seed)
+
     indices = list(range(len(data_paths)))
     random.shuffle(indices)
 

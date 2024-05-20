@@ -87,39 +87,30 @@ class PreprocessKumar(Preprocess):
             label_paths = glob.glob(os.path.join(src_label_dir, "*.mat"))
             print(f"\nProcess {split} label...")
             for path in tqdm.tqdm(label_paths):
-                label = loadmat(path)["inst_map"]
-                vals = [_ for _ in np.unique(label) if _ != 0]
-                random.shuffle(vals)
-                val_groups = [vals[i:i + 255] for i in range(0, len(vals), 255)]
-                for i, group in enumerate(val_groups):
-                    step = self.calc_step(len(group))
-                    dst_label = np.zeros(
-                        shape=(label.shape[0], label.shape[1]),
-                        dtype=np.uint8
-                    )
-                    for k, val in enumerate(group):
-                        tmp_label = label.copy().astype(np.uint8)
-                        tmp_label[label != val] = 0
-                        tmp_label[label == val] = 255
-                        tmp_contours, _ = cv2.findContours(tmp_label,
-                                                           cv2.RETR_EXTERNAL,
-                                                           cv2.CHAIN_APPROX_SIMPLE)
-                        dst_label = cv2.drawContours(dst_label, tmp_contours,
-                                                     -1,
-                                                     color=255 - k * step,
-                                                     thickness=-1)
+                label = loadmat(path)["inst_map"].astype(np.uint16)
+                dst_label_uint16 = self.transform(label)
 
-                    dst_label = self.transform(dst_label)
+                basename = os.path.basename(path)[:-4]
 
-                    basename = os.path.basename(path)[:-4] + ".png"
+                # npy
+                dst_arr_path = os.path.join(self.dst_label_dir,
+                                            self.dst_prefix + f"{basename}.npy")
+                np.save(dst_arr_path, dst_label_uint16)
 
-                    if i == 0:
-                        label_name = basename
-                    else:
-                        label_name = f"{basename[:-4]}({i}).png"
+                # png
+                vals_uint16 = [_ for _ in np.unique(dst_label_uint16) if _ != 0][:255]
+                dst_label_uint8 = np.zeros(shape=dst_label_uint16.shape,
+                                           dtype=np.uint8)
+                if len(vals_uint16) > 0:
+                    random.shuffle(vals_uint16)
+                    step = self.calc_step(len(vals_uint16))
+                    for j, val in enumerate(vals_uint16):
+                        dst_label_uint8[
+                            dst_label_uint16 == val] = 255 - j * step
 
-                    dst_path = os.path.join(self.dst_label_dir, label_name)
-                    cv2.imwrite(dst_path, dst_label)
+                dst_img_path = os.path.join(self.dst_label_dir,
+                                            self.dst_prefix + f"{basename}.png")
+                cv2.imwrite(dst_img_path, dst_label_uint8)
 
 
 if __name__ == "__main__":

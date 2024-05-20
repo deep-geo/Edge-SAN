@@ -46,45 +46,31 @@ class PreprocessHistology(Preprocess):
         label_paths = glob.glob(os.path.join(src_label_dir, "*.png"))
         print("\nProcess label...")
         for path in tqdm.tqdm(label_paths):
-            basename = os.path.basename(path)
-            src_label = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+            label = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+            label = label.astype(np.uint16)  # keep the same data type with other datasets
 
-            # remove bound
-            src_label[src_label == 76] = 0
-            src_label[src_label == 149] = 0
+            dst_label_uint16 = self.transform(label)
 
-            contours, _ = cv2.findContours(src_label, cv2.RETR_EXTERNAL,
-                                           cv2.CHAIN_APPROX_SIMPLE)
-            contours = list(contours)
-            random.shuffle(contours)
+            basename = os.path.basename(path)[:-4]
 
-            contour_groups = [contours[i:i + 255] for i in range(0, len(contours), 255)]
-            for i, group in enumerate(contour_groups):
-                step = self.calc_step(len(group))
-                dst_label = np.zeros(shape=src_label.shape, dtype=np.uint8)
-                for j, contour in enumerate(group):
-                    tmp_label = np.zeros(shape=src_label.shape, dtype=np.uint8)
-                    tmp_label = cv2.drawContours(tmp_label, [contour], -1, 255, -1)
+            # npy
+            dst_arr_path = os.path.join(self.dst_label_dir,
+                                        self.dst_prefix + f"{basename}.npy")
+            np.save(dst_arr_path, dst_label_uint16)
 
-                    # 膨胀补上边界
-                    dilation_kernel = np.ones((3, 3), np.uint8)
-                    tmp_label = cv2.dilate(tmp_label, dilation_kernel, iterations=2)
+            # png
+            vals_uint16 = [_ for _ in np.unique(dst_label_uint16) if _ != 0][:255]
+            dst_label_uint8 = np.zeros(shape=dst_label_uint16.shape,
+                                       dtype=np.uint8)
+            if len(vals_uint16) > 0:
+                random.shuffle(vals_uint16)
+                step = self.calc_step(len(vals_uint16))
+                for j, val in enumerate(vals_uint16):
+                    dst_label_uint8[dst_label_uint16 == val] = 255 - j * step
 
-                    tmp_contours, _ = cv2.findContours(tmp_label,
-                                                       cv2.RETR_EXTERNAL,
-                                                       cv2.CHAIN_APPROX_SIMPLE)
-                    dst_label = cv2.drawContours(dst_label, tmp_contours, -1,
-                                                 color=255 - j * step, thickness=-1)
-
-                dst_label = self.transform(dst_label)
-
-                if i == 0:
-                    label_name = self.dst_prefix + basename
-                else:
-                    label_name = self.dst_prefix + f"{basename[:-4]}({i}).png"
-
-                dst_path = os.path.join(self.dst_label_dir, label_name)
-                cv2.imwrite(dst_path, dst_label)
+            dst_img_path = os.path.join(self.dst_label_dir,
+                                        self.dst_prefix + f"{basename}.png")
+            cv2.imwrite(dst_img_path, dst_label_uint8)
 
 
 if __name__ == "__main__":
@@ -95,5 +81,12 @@ if __name__ == "__main__":
     parser.add_argument("--dst_prefix", type=str, default="")
     args = parser.parse_args()
 
-    PreprocessHistology(args.src_root, args.dst_root,
-                        args.dst_size, args.dst_prefix).process()
+    # PreprocessHistology(args.src_root, args.dst_root,
+    #                     args.dst_size, args.dst_prefix).process()
+
+    PreprocessHistology(
+        "/Users/zhaojq/Datasets/SAM_nuclei/histology",
+        "/Users/zhaojq/Datasets/SAM_nuclei/histology11111",
+        256,
+        "histology"
+    ).process()

@@ -52,36 +52,32 @@ class PreprocessGlandSeg(Preprocess):
         print("\nProcess label...")
         for i, path in tqdm.tqdm(enumerate(src_label_paths),
                                  total=len(src_label_paths)):
-            src_label = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-            vals = [_ for _ in np.unique(src_label) if _ != 0]
-            random.shuffle(vals)
-            val_groups = [vals[i:i + 255] for i in range(0, len(vals), 255)]
-            for j, group in enumerate(val_groups):
-                step = self.calc_step(len(group))
-                dst_label = np.zeros(
-                    shape=(src_label.shape[0], src_label.shape[1]),
-                    dtype=np.uint8
-                )
-                for k, val in enumerate(group):
-                    tmp_label = src_label.copy().astype(np.uint8)
-                    tmp_label[src_label != val] = 0
-                    tmp_label[src_label == val] = 255
-                    tmp_contours, _ = cv2.findContours(tmp_label,
-                                                       cv2.RETR_EXTERNAL,
-                                                       cv2.CHAIN_APPROX_SIMPLE)
-                    dst_label = cv2.drawContours(dst_label, tmp_contours, -1,
-                                                 color=255 - k * step,
-                                                 thickness=-1)
+            label = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+            label = label.astype(np.uint16)    # keep the same data type with other datasets
 
-                dst_label = self.transform(dst_label)
+            dst_label_uint16 = self.transform(label)
 
-                if j == 0:
-                    label_name = self.dst_prefix + f"image_{i + 1:04d}.png"
-                else:
-                    label_name = self.dst_prefix + f"image_{i + 1:04d}({j}).png"
+            basename = f"image_{i + 1:04d}"
 
-                dst_path = os.path.join(self.dst_label_dir, label_name)
-                cv2.imwrite(dst_path, dst_label)
+            # npy
+            dst_arr_path = os.path.join(self.dst_label_dir,
+                                        self.dst_prefix + f"{basename}.npy")
+            np.save(dst_arr_path, dst_label_uint16)
+
+            # png
+            vals_uint16 = [_ for _ in np.unique(dst_label_uint16) if _ != 0][
+                          :255]
+            dst_label_uint8 = np.zeros(shape=dst_label_uint16.shape,
+                                       dtype=np.uint8)
+            if len(vals_uint16) > 0:
+                random.shuffle(vals_uint16)
+                step = self.calc_step(len(vals_uint16))
+                for j, val in enumerate(vals_uint16):
+                    dst_label_uint8[dst_label_uint16 == val] = 255 - j * step
+
+            dst_img_path = os.path.join(self.dst_label_dir,
+                                        self.dst_prefix + f"{basename}.png")
+            cv2.imwrite(dst_img_path, dst_label_uint8)
 
 
 if __name__ == "__main__":
@@ -94,3 +90,4 @@ if __name__ == "__main__":
 
     PreprocessGlandSeg(args.src_root, args.dst_root,
                        args.dst_size, args.dst_prefix).process()
+
