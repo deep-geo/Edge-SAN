@@ -1,15 +1,17 @@
-from albumentations.pytorch import ToTensorV2
-import cv2
-import albumentations as A
-import torch
+import os
+import logging
 import numpy as np
+import cv2
+import torch
+import torch.nn as nn
+import albumentations as A
+
+from albumentations.pytorch import ToTensorV2
 from torch.nn import functional as F
 from skimage.measure import label, regionprops
-from matplotlib import pyplot as plt
-import random
-import torch.nn as nn
-import logging
-import os
+
+
+STEP = 15
 
 
 def get_boxes_from_mask(mask, box_num=1, std = 0.1, max_pixel = 5):
@@ -399,3 +401,26 @@ class BCE_Diceloss_IoULoss(nn.Module):
         #loss2 = self.maskiou_loss(pred, mask, pred_iou)
         #loss = loss1 #+ loss2 * self.iou_scale
         return loss1
+
+
+def calc_step(num_colors: int):
+    return max(1, min(STEP, int((255 - 25) / num_colors)))
+
+
+def semantic2instances(gray: np.ndarray) -> np.ndarray:
+    _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+    _, label = cv2.connectedComponents(binary)
+    label = label.astype(np.uint16)
+    return label
+
+
+def get_transform(dst_size: int, ori_h: int, ori_w: int):
+    if ori_h < dst_size and ori_w < dst_size:
+        t = A.PadIfNeeded(
+            min_height=dst_size, min_width=dst_size,
+            position="center", border_mode=cv2.BORDER_CONSTANT,
+            value=0
+        )
+    else:
+        t = A.Resize(dst_size, dst_size, interpolation=cv2.INTER_NEAREST)
+    return t

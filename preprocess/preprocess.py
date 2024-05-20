@@ -1,24 +1,8 @@
 import os
-import cv2
 import numpy as np
-import albumentations as A
 
 from abc import abstractmethod
-
-
-STEP = 15
-
-
-def get_transform(dst_size: int, ori_h: int, ori_w: int):
-    if ori_h < dst_size and ori_w < dst_size:
-        t = A.PadIfNeeded(
-            min_height=dst_size, min_width=dst_size,
-            position="center", border_mode=cv2.BORDER_CONSTANT,
-            value=0
-        )
-    else:
-        t = A.Resize(dst_size, dst_size, interpolation=cv2.INTER_NEAREST)
-    return t
+from utils import calc_step, get_transform
 
 
 class Preprocess:
@@ -47,7 +31,7 @@ class Preprocess:
         return t(image=img)["image"]
 
     def calc_step(self, num_colors: int):
-        return max(1, min(STEP, int((255 - 25) / num_colors)))
+        return calc_step(num_colors)
 
     @abstractmethod
     def process(self):

@@ -4,21 +4,27 @@ import re
 import random
 import datetime
 import glob
+
+import cv2
 import numpy as np
 import torch
+import wandb
 
 from segment_anything import sam_model_registry, SamPredictor
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
-from DataLoader import TrainingDataset, TestingDataset, stack_dict_batched
+from DataLoader import TrainingDataset, TestingDataset, UnsupervisedDataset, \
+    stack_dict_batched
 from utils import FocalDiceloss_IoULoss, get_logger, generate_point, \
-    setting_prompt_none, save_masks
+    setting_prompt_none, save_masks, semantic2instances, get_transform, calc_step
 from metrics import SegMetrics
 from tqdm import tqdm
 # from apex import amp
 from test import postprocess_masks
-import wandb
+from scheduler import Schedular
+from preprocess.split_dataset import split_dataset
+
 
 torch.set_default_dtype(torch.float32)
 max_num_chkpt = 3
@@ -51,7 +57,11 @@ def parse_args():
     parser.add_argument("--multimask", action='store_true', help="ouput multimask")
     parser.add_argument("--encoder_adapter", action='store_true', help="use adapter")
     parser.add_argument("--prompt_path", type=str, default=None, help="fix prompt path")
-    parser.add_argument("--save_pred", action='store_true', help="save reslut")
+    parser.add_argument("--save_pred", action='store_true', help="save result")
+    parser.add_argument("--activate_unsupervised", action="store_true", help="activate unsupervised")
+    parser.add_argument("--unsupervised_dir", type=str, help="dir cointaining unsupervised data")
+    parser.add_argument("--unsupervised_start_epoch", type=int, default=0, help="epoch to start generating unsupervised dataset")
+    parser.add_argument("--unsupervised_step", type=int, default=None, help="step to update unsupervised dataset")
     # parser.add_argument("--use_amp", type=bool, default=False, help="use amp")
     args = parser.parse_args()
     if args.resume:
@@ -115,8 +125,71 @@ def prompt_and_decoder(args, batched_input, model, image_embeddings,
         low_res_masks = torch.stack(low_res, 0)
 
     masks = F.interpolate(low_res_masks, (args.image_size, args.image_size),
-                          mode="bilinear", align_corners=False, )
+                          mode="bilinear", align_corners=False)
     return masks, low_res_masks, iou_predictions
+
+
+@torch.no_grad()
+def generate_unsupervised(args, model, dst_unsupervised_root: str):
+    model.eval()
+    dataset = UnsupervisedDataset(data_root=dst_unsupervised_root, ext="png",
+                                  dst_size=args.image_size)
+    dataloader = DataLoader(dataset=dataset, batch_size=args.batch_size,
+                            shuffle=False, num_workers=args.num_workers)
+
+    label_dir = os.path.join(dst_unsupervised_root, "label")
+    os.makedirs(label_dir, exist_ok=True)
+
+    # generate semantic mask
+    mask_paths = []
+    semantic_suffix = "_semantic"
+    for batched_input in tqdm(dataloader):
+        batched_input = to_device(batched_input, args.device)
+        batched_input["point_coords"] = None
+        image_embeddings = model.image_encoder(batched_input["image"])
+        masks, _, _ = prompt_and_decoder(args, batched_input, model, image_embeddings)
+        for b in range(masks.shape[0]):
+            image_path = batched_input["image_path"][b]
+            original_size = batched_input["original_size"][0][b], batched_input["original_size"][1][b]
+            mask = masks[b, :, :, :]
+            # todo semantic to instance
+            mask_name = os.path.basename(image_path)[:-4] + f"{semantic_suffix}.png"
+            save_masks(
+                preds=mask,
+                save_path=label_dir,
+                mask_name=mask_name,
+                image_size=args.image_size,
+                original_size=original_size
+            )
+            mask_paths.append(os.path.join(label_dir, mask_name))
+
+    # convert semantic mask to instance mask
+    for mask_path in mask_paths:
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        label_uint16 = semantic2instances(mask)
+
+        basename = os.path.basename(mask_path)[:-len( f"{semantic_suffix}.png")]
+        inst_arr_path = os.path.join(label_dir, f"{basename}.npy")
+        inst_img_path = os.path.join(label_dir, f"{basename}.png")
+
+        transform = get_transform(args.image_size, mask.shape[0], mask.shape[1])
+        dst_label_uint16 = transform(image=label_uint16)["image"]
+
+        # npy
+        np.save(inst_arr_path, dst_label_uint16)
+
+        # png
+        vals_uint16 = [_ for _ in np.unique(dst_label_uint16) if _ != 0][:255]
+        dst_label_uint8 = np.zeros(shape=dst_label_uint16.shape, dtype=np.uint8)
+        if len(vals_uint16) > 0:
+            random.shuffle(vals_uint16)
+            step = calc_step(len(vals_uint16))
+            for j, val in enumerate(vals_uint16):
+                dst_label_uint8[dst_label_uint16 == val] = 255 - j * step
+
+        cv2.imwrite(inst_img_path, dst_label_uint8)
+
+    split_dataset(data_root=dst_unsupervised_root, ext="png", test_size=0.0)
 
 
 @torch.no_grad()
@@ -138,29 +211,25 @@ def eval_model(args, model, test_loader):
         img_name = batched_input['name'][0]
         if args.prompt_path is None:
             prompt_dict[img_name] = {
-                "boxes": batched_input["boxes"].squeeze(
-                    1).cpu().numpy().tolist(),
-                "point_coords": batched_input["point_coords"].squeeze(
-                    1).cpu().numpy().tolist(),
-                "point_labels": batched_input["point_labels"].squeeze(
-                    1).cpu().numpy().tolist()
+                "boxes": batched_input["boxes"].squeeze(1).cpu().numpy().tolist(),
+                "point_coords": batched_input["point_coords"].squeeze(1).cpu().numpy().tolist(),
+                "point_labels": batched_input["point_labels"].squeeze(1).cpu().numpy().tolist()
             }
 
         with torch.no_grad():
             image_embeddings = model.image_encoder(batched_input["image"])
 
         if args.boxes_prompt:
-            save_path = os.path.join(args.work_dir, args.run_name,
-                                     "boxes_prompt")
-            batched_input["point_coords"], batched_input[
-                "point_labels"] = None, None
+            save_path = os.path.join(args.work_dir, args.run_name, "boxes_prompt")
+            batched_input["point_coords"], batched_input["point_labels"] = None, None
             masks, low_res_masks, iou_predictions = prompt_and_decoder(
                 args, batched_input, model, image_embeddings)
             points_show = None
 
         else:
-            save_path = os.path.join(f"{args.work_dir}", args.run_name,
-                                     f"iter{args.iter_point if args.iter_point > 1 else args.point_num}_prompt")
+            save_path = os.path.join(
+                f"{args.work_dir}", args.run_name,
+                f"iter{args.iter_point if args.iter_point > 1 else args.point_num}_prompt")
             batched_input["boxes"] = None
             point_coords, point_labels = [batched_input["point_coords"]], [
                 batched_input["point_labels"]]
@@ -175,10 +244,8 @@ def eval_model(args, model, test_loader):
                     batched_input = to_device(batched_input, args.device)
                     point_coords.append(batched_input["point_coords"])
                     point_labels.append(batched_input["point_labels"])
-                    batched_input["point_coords"] = torch.concat(point_coords,
-                                                                 dim=1)
-                    batched_input["point_labels"] = torch.concat(point_labels,
-                                                                 dim=1)
+                    batched_input["point_coords"] = torch.concat(point_coords,dim=1)
+                    batched_input["point_labels"] = torch.concat(point_labels,dim=1)
 
             points_show = (torch.concat(point_coords, dim=1),
                            torch.concat(point_labels, dim=1))
@@ -353,8 +420,8 @@ def main(args):
 
     args.run_name = f"{args.run_name}_{datetime.datetime.now().strftime('%m-%d_%H-%M')}"
 
-    chkpt_dir = os.path.join(args.work_dir, "models", args.run_name)
-    os.makedirs(chkpt_dir, exist_ok=True)
+    run_dir = os.path.join(args.work_dir, "models", args.run_name)
+    os.makedirs(run_dir, exist_ok=True)
 
     if args.lr_scheduler:
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10], gamma=0.5)
@@ -366,7 +433,7 @@ def main(args):
             resume_chkpt = args.resume
         else:   # dir
             chkpts = sorted(
-                glob.glob(os.path.join(chkpt_dir, "*.pth")),
+                glob.glob(os.path.join(run_dir, "*.pth")),
                 key=lambda p: float(
                     re.search(r"epoch(\d+)", os.path.basename(p)).group(1))
             )
@@ -395,6 +462,21 @@ def main(args):
     if args.seed is not None:
         random.seed(args.seed)
 
+    # unsupervised learning
+    dst_unsupervised_root = None
+    unsupervised_schedular = None
+    if args.activate_unsupervised:
+        dst_unsupervised_root = os.path.join(run_dir, "unsupervised")
+        os.makedirs(dst_unsupervised_root)
+        os.symlink(args.unsupervised_dir, os.path.join(dst_unsupervised_root, "data"))
+        unsupervised_schedular = Schedular(
+            schedular_dir=run_dir,
+            current_epoch=0,
+            step=args.unsupervised_step if args.unsupervised_step else 1,
+            start_epoch=args.unsupervised_start_epoch,
+            end_epoch=None
+        )
+
     train_dataset = TrainingDataset(split_paths=args.split_paths,
                                     point_num=1,  # todo 1?
                                     mask_num=args.mask_num,
@@ -420,10 +502,9 @@ def main(args):
 
         model.train()
 
-        train_losses, train_iter_metrics = train_one_epoch(args, model,
-                                                           optimizer,
-                                                           train_loader, epoch,
-                                                           criterion)
+        train_losses, train_iter_metrics = train_one_epoch(
+            args, model, optimizer, train_loader, epoch, criterion
+        )
 
         if args.lr_scheduler is not None:
             scheduler.step()
@@ -449,7 +530,7 @@ def main(args):
         if average_test_loss < best_loss:
             # clean redundant checkpoints
             chkpts = sorted(
-                glob.glob(os.path.join(chkpt_dir, "*.pth")),
+                glob.glob(os.path.join(run_dir, "*.pth")),
                 key=lambda p: float(
                     re.search(r"test-loss(\d+\.\d+)", os.path.basename(p)).group(1))
             )
@@ -459,7 +540,7 @@ def main(args):
             # save the latest checkpoint
             best_loss = average_test_loss
             save_path = os.path.join(
-                chkpt_dir,
+                run_dir,
                 f"epoch{epoch + 1:04d}_test-loss{average_test_loss:.4f}_sam.pth"
             )
             state = {'model': model.float().state_dict(),
@@ -467,6 +548,24 @@ def main(args):
                      'train-loss': average_loss, 'test-loss': average_test_loss,
                      'epoch': epoch + 1}
             torch.save(state, save_path)
+
+        if args.activate_unsupervised:
+            unsupervised_schedular.step()
+            if unsupervised_schedular.is_active():
+                print("\nGenerating unsupervised dataset...")
+                unsupervised_root = os.path.join(run_dir, "unsupervised")
+                generate_unsupervised(args, model, unsupervised_root)
+                unsupervised_split_path = os.path.join(unsupervised_root, "split.json")
+                train_dataset = TrainingDataset(
+                    split_paths=args.split_paths + [unsupervised_split_path],
+                    point_num=1,  # todo 1?
+                    mask_num=args.mask_num,
+                    requires_name=False
+                )
+                train_loader = DataLoader(train_dataset,
+                                          batch_size=args.batch_size,
+                                          shuffle=True,
+                                          num_workers=args.num_workers)
 
 
 if __name__ == '__main__':

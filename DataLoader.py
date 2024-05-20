@@ -9,9 +9,9 @@ import albumentations as A
 
 from albumentations.pytorch import ToTensorV2
 from tqdm import tqdm
-from utils import get_boxes_from_mask, init_point_sampling, train_transforms
+from utils import get_boxes_from_mask, init_point_sampling, train_transforms, \
+    get_transform
 from torch.utils.data import Dataset
-from preprocess.preprocess import get_transform
 
 
 class TestingDataset(Dataset):
