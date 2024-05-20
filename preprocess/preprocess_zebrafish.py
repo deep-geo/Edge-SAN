@@ -87,7 +87,7 @@ class PreprocessZebrafish(Preprocess):
 
                 for dim in range(3):
                     for i in range(images.shape[dim]):
-                        basename = data_basename[:-3] + f"_dim{dim}"
+                        basename = data_basename[:-3] + f"_slice{i:03d}" + f"_dim{dim}"
 
                         if dim == 0:
                             img = images[i, :, :]
@@ -150,7 +150,7 @@ class PreprocessZebrafish(Preprocess):
 
                 for dim in range(3):
                     for i in range(images.shape[dim]):
-                        basename = data_basename[:-3] + f"_dim{dim}"
+                        basename = data_basename[:-3] + f"_slice{i:03d}" + f"_dim{dim}"
 
                         if dim == 0:
                             img = images[i, :, :]
