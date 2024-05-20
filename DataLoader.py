@@ -2,14 +2,16 @@ import os
 import json
 import random
 import cv2
+import glob
 import torch
 import numpy as np
 import albumentations as A
 
 from albumentations.pytorch import ToTensorV2
 from tqdm import tqdm
-from utils import get_boxes_from_mask, init_point_sampling
+from utils import get_boxes_from_mask, init_point_sampling, train_transforms
 from torch.utils.data import Dataset
+from preprocess.preprocess import get_transform
 
 
 class TestingDataset(Dataset):
@@ -40,16 +42,12 @@ class TestingDataset(Dataset):
             print(f"\nRead test data from: {data_root}")
             for data_path, label_path in tqdm(split_data["test"]):
                 data_path = os.path.join(data_root, data_path)
-                if isinstance(label_path, str):
-                    label_paths = [os.path.join(data_root, label_path)]
-                else:
-                    label_paths = [os.path.join(data_root, _) for _ in label_path]
-                for path in label_paths:
-                    label_img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-                    vals = sorted([val for val in np.unique(label_img) if val != 0])
-                    for val in vals:
-                        self.image_paths.append(data_path)
-                        self.label_paths.append((val, path))
+                label_path = os.path.join(data_root, label_path)
+                label = np.load(label_path)
+                vals = sorted([val for val in np.unique(label) if val != 0])
+                for val in vals:
+                    self.image_paths.append(data_path)
+                    self.label_paths.append((val, label_path))
 
         self.pixel_mean = [123.675, 116.28, 103.53]
         self.pixel_std = [58.395, 57.12, 57.375]
@@ -70,7 +68,7 @@ class TestingDataset(Dataset):
             print(self.image_paths[index])
 
         mask_val, mask_path = self.label_paths[index]
-        ori_np_mask = cv2.imread(mask_path, 0)  # 0 - cv2.IMREAD_GRAYSCALE
+        ori_np_mask = np.load(mask_path)
         ori_np_mask[ori_np_mask != mask_val] = 0
         ori_np_mask[ori_np_mask == mask_val] = 1
 
@@ -141,13 +139,9 @@ class TrainingDataset(Dataset):
             print(f"\nRead train data from: {data_root}")
             for data_path, label_path in tqdm(split_data["train"]):
                 data_path = os.path.join(data_root, data_path)
-                if isinstance(label_path, str):
-                    label_paths = [os.path.join(data_root, label_path)]
-                else:
-                    label_paths = [os.path.join(data_root, _) for _ in label_path]
-                for path in label_paths:
-                    self.image_paths.append(data_path)
-                    self.label_paths.append(path)
+                label_path = os.path.join(data_root, label_path)
+                self.image_paths.append(data_path)
+                self.label_paths.append(label_path)
     
     def __getitem__(self, index):
         """
@@ -174,7 +168,7 @@ class TrainingDataset(Dataset):
         # mask_path = random.choices(self.label_paths[index], k=self.mask_num)
 
         mask_path = self.label_paths[index]
-        original_mask = cv2.imread(mask_path, 0)
+        original_mask = np.load(mask_path)
         mask_vals = [_ for _ in np.unique(original_mask) if _ != 0]
         choices_nuclei = random.choices(mask_vals, k=self.mask_num)
 
@@ -228,3 +222,33 @@ def stack_dict_batched(batched_input):
         else:
             out_dict[k] = v.reshape(-1, *v.shape[2:])
     return out_dict
+
+
+class UnsupervisedDataset(Dataset):
+
+    def __init__(self, data_root: str, ext: str, dst_size: int):
+        self.data_root = data_root
+        self.data_dir = os.path.join(self.data_root, "data")
+        self.label_dir = os.path.join(self.data_dir, "label")
+        os.makedirs(self.label_dir, exist_ok=True)
+        ext = ext if not ext.startswith(".") else ext[1:]
+        self.data_paths = glob.glob(os.path.join(self.data_dir, f"*.{ext}"))
+        self.dst_size = dst_size
+
+    def __getitem__(self, index):
+        image_input = {}
+        image_path = self.data_paths[index]
+        image = cv2.imread(image_path)
+
+        h, w, _ = image.shape
+        transforms = train_transforms(self.dst_size, h, w)
+        augments = transforms(image=image)
+
+        image_input["image"] = augments['image']
+        image_input["original_size"] = (h, w)
+        image_input["image_path"] = image_path
+
+        return image_input
+
+    def __len__(self):
+        return len(self.data_paths)
