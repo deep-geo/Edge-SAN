@@ -17,28 +17,13 @@ def split_dataset(data_root: str, ext: str, test_size: float, seed: int = None):
     label_dir = os.path.join(data_root, "label")
 
     data_paths: List[str] = []
-    label_paths: List[str | List[str]] = []
+    label_paths: List[str] = []
     for data_path in glob.glob(os.path.join(data_dir, f"*.{ext}")):
         basename = os.path.basename(data_path)
-        label_path = os.path.join(label_dir, basename)
+        label_path = os.path.join(label_dir, basename[:-4] + ".npy")
         if os.path.exists(label_path):
             data_paths.append(os.path.relpath(data_path, data_root))
-        else:
-            continue
-
-        label_lst = [os.path.relpath(label_path, data_root)]
-        n = 1
-        while True:
-            path = label_path[:-(len(ext) + 1)] + f"({n}).{ext}"
-            if os.path.exists(path):
-                label_lst.append(os.path.relpath(path, data_root))
-                n += 1
-            else:
-                break
-        if len(label_lst) == 1:
-            label_paths.append(label_lst[0])
-        else:
-            label_paths.append(label_lst)
+            label_paths.append(os.path.relpath(label_path, data_root))
 
     if seed is not None:
         random.seed(seed)
