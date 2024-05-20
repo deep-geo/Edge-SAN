@@ -40,10 +40,10 @@ echo -e "\n################# PROCESS DynamicNuclearNet #################"
 python preprocess_DynamicNuclearNet.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix || exit
 
 # lizard
-src_root="<path_to_lizard_src_root>"
-dst_prefix="lizard"
-echo -e "\n################# PROCESS lizard #################"
-python preprocess_lizard.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix || exit
+#src_root="<path_to_lizard_src_root>"
+#dst_prefix="lizard"
+#echo -e "\n################# PROCESS lizard #################"
+#python preprocess_lizard.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix || exit
 
 # CPM15
 src_root="<path_to_CPM15_src_root>"
@@ -74,6 +74,13 @@ src_root="<path_to_CoNSeP_src_root>"
 dst_prefix="CoNSeP"
 echo -e "\n################# PROCESS CoNSeP #################"
 python preprocess_CoNSeP.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix || exit
+
+# zebrafish
+src_root="<path_to_zebrafish_src_root>"
+dst_prefix="zebrafish"
+echo -e "\n################# PROCESS zebrafish #################"
+python preprocess_zebrafish.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix || exit
+
 
 # split dataset
 echo -e "\n>>>>>>>>>>>>>>>>>>>>> Split Datasets <<<<<<<<<<<<<<<<<<<<<<"
