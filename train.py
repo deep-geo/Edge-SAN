@@ -583,8 +583,10 @@ def main(args):
                 unsupervised_root = os.path.join(run_dir, "unsupervised")
                 generate_unsupervised(args, model, unsupervised_root)
                 unsupervised_split_path = os.path.join(unsupervised_root, "split.json")
+                split_paths = [unsupervised_split_path] if args.unsupervised_only else \
+                    args.split_paths + [unsupervised_split_path]
                 train_dataset = TrainingDataset(
-                    split_paths=args.split_paths + [unsupervised_split_path],
+                    split_paths=split_paths,
                     point_num=1,  # todo 1?
                     mask_num=args.mask_num,
                     requires_name=False
