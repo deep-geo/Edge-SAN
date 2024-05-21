@@ -456,7 +456,7 @@ def main(args):
               "multimask", "encoder_adapter"]
     config = {p: getattr(args, p) for p in params}
     config["resume_checkpoint"] = resume_chkpt
-    wandb.init(project="NucleiSAM", name=args.run_name, config=config)
+    wandb.init(project="SAM_Nuclei", name=args.run_name, config=config)
 
     # todo random seed
     if args.seed is not None:
