@@ -477,10 +477,22 @@ def main(args):
             end_epoch=None
         )
 
-    train_dataset = TrainingDataset(split_paths=args.split_paths,
-                                    point_num=1,  # todo 1?
-                                    mask_num=args.mask_num,
-                                    requires_name=False)
+    if args.activate_unsupervised:
+        print("\nGenerating unsupervised dataset...")
+        unsupervised_root = os.path.join(run_dir, "unsupervised")
+        generate_unsupervised(args, model, unsupervised_root)
+        unsupervised_split_path = os.path.join(unsupervised_root, "split.json")
+        train_dataset = TrainingDataset(
+            split_paths=args.split_paths + [unsupervised_split_path],
+            point_num=1,  # todo 1?
+            mask_num=args.mask_num,
+            requires_name=False
+        )
+    else:
+        train_dataset = TrainingDataset(split_paths=args.split_paths,
+                                        point_num=1,  # todo 1?
+                                        mask_num=args.mask_num,
+                                        requires_name=False)
     test_dataset = TestingDataset(split_paths=args.split_paths,
                                   requires_name=True,
                                   point_num=args.point_num,
