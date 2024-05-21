@@ -170,7 +170,7 @@ class TrainingDataset(Dataset):
             # mask_path = random.choices(self.label_paths[index], k=self.mask_num)
 
             mask_path = self.label_paths[index]
-            original_mask = np.load(mask_path)
+            original_mask = np.load(mask_path).astype(np.float32)
             mask_vals = [_ for _ in np.unique(original_mask) if _ != 0]
             if not mask_vals:
                 index = random.choice(range(self.__len__()))
