@@ -56,9 +56,7 @@ import os
 import glob
 import argparse
 import cv2
-import numpy as np
 import tqdm
-import random
 
 from preprocess import Preprocess
 from scipy.io import loadmat
@@ -73,44 +71,19 @@ class PreprocessKumar(Preprocess):
             src_data_paths = glob.glob(os.path.join(src_data_dir, "*.tif"))
 
             print(f"\nProcess {split} data...")
-            for src_data_path in tqdm.tqdm(src_data_paths):
-                img = cv2.imread(src_data_path)
-                dst_img = self.transform(img)
-                dst_data_path = os.path.join(
-                    self.dst_data_dir,
-                    self.dst_prefix + os.path.basename(src_data_path)
-                )
-                cv2.imwrite(dst_data_path, dst_img)
+            for path in tqdm.tqdm(src_data_paths):
+                img = cv2.imread(path)
+                self.save_data(ori_data=img,
+                               data_name=os.path.basename(path)[:-4])
 
             # label
             src_label_dir = os.path.join(self.src_root, split, "Labels")
             label_paths = glob.glob(os.path.join(src_label_dir, "*.mat"))
             print(f"\nProcess {split} label...")
             for path in tqdm.tqdm(label_paths):
-                label = loadmat(path)["inst_map"].astype(np.uint16)
-                dst_label_uint16 = self.transform(label)
-
-                basename = os.path.basename(path)[:-4]
-
-                # npy
-                dst_arr_path = os.path.join(self.dst_label_dir,
-                                            self.dst_prefix + f"{basename}.npy")
-                np.save(dst_arr_path, dst_label_uint16)
-
-                # png
-                vals_uint16 = [_ for _ in np.unique(dst_label_uint16) if _ != 0][:255]
-                dst_label_uint8 = np.zeros(shape=dst_label_uint16.shape,
-                                           dtype=np.uint8)
-                if len(vals_uint16) > 0:
-                    random.shuffle(vals_uint16)
-                    step = self.calc_step(len(vals_uint16))
-                    for j, val in enumerate(vals_uint16):
-                        dst_label_uint8[
-                            dst_label_uint16 == val] = 255 - j * step
-
-                dst_img_path = os.path.join(self.dst_label_dir,
-                                            self.dst_prefix + f"{basename}.png")
-                cv2.imwrite(dst_img_path, dst_label_uint8)
+                label = loadmat(path)["inst_map"]
+                self.save_label(ori_label=label,
+                                label_name=os.path.basename(path)[:-4])
 
 
 if __name__ == "__main__":

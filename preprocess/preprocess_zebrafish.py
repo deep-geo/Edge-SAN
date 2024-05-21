@@ -58,10 +58,8 @@ Original dataset structure:
 import os
 import glob
 import argparse
-import cv2
 import numpy as np
 import tqdm
-import random
 import h5py
 
 from preprocess import Preprocess
@@ -91,46 +89,18 @@ class PreprocessZebrafish(Preprocess):
 
                         if dim == 0:
                             img = images[i, :, :]
-                            label = labels[i, :, :].astype(np.uint16)
+                            label = labels[i, :, :]
                         elif dim == 1:
                             img = images[:, i, :]
-                            label = labels[:, i, :].astype(np.uint16)
+                            label = labels[:, i, :]
                         else:
                             img = images[:, :, i]
-                            label = labels[:, :, i].astype(np.uint16)
+                            label = labels[:, :, i]
 
-                        # data
-                        dst_img = self.transform(img)
-                        dst_img_path = os.path.join(
-                            self.dst_data_dir,
-                            self.dst_prefix + "Mouse_" + f"{basename}.png"
-                        )
-                        cv2.imwrite(dst_img_path, dst_img)
-
-                        # label
-                        dst_label_uint16 = self.transform(label)
-                        # npy
-                        dst_arr_path = os.path.join(
-                            self.dst_label_dir,
-                            self.dst_prefix + "Mouse_" + f"{basename}.npy"
-                        )
-                        np.save(dst_arr_path, dst_label_uint16)
-                        # png
-                        vals_uint16 = [_ for _ in np.unique(dst_label_uint16) if _ != 0][:255]
-                        dst_label_uint8 = np.zeros(shape=dst_label_uint16.shape,
-                                                   dtype=np.uint8)
-                        if len(vals_uint16) > 0:
-                            random.shuffle(vals_uint16)
-                            step = self.calc_step(len(vals_uint16))
-                            for j, val in enumerate(vals_uint16):
-                                dst_label_uint8[
-                                    dst_label_uint16 == val] = 255 - j * step
-
-                        dst_img_path = os.path.join(
-                            self.dst_label_dir,
-                            self.dst_prefix + "Mouse_" + f"{basename}.png"
-                        )
-                        cv2.imwrite(dst_img_path, dst_label_uint8)
+                        self.save_data(ori_data=img,
+                                       data_name=f"Mouse_{basename}")
+                        self.save_label(ori_label=label,
+                                        label_name=f"Mouse_{basename}")
 
         print("\nProcess Zebrafish(NucMM-Z)...")
         src_data_dir = os.path.join(self.src_root, "Zebrafish(NucMM-Z)", "Image")
@@ -154,47 +124,18 @@ class PreprocessZebrafish(Preprocess):
 
                         if dim == 0:
                             img = images[i, :, :]
-                            label = labels[i, :, :].astype(np.uint16)
+                            label = labels[i, :, :]
                         elif dim == 1:
                             img = images[:, i, :]
-                            label = labels[:, i, :].astype(np.uint16)
+                            label = labels[:, i, :]
                         else:
                             img = images[:, :, i]
-                            label = labels[:, :, i].astype(np.uint16)
+                            label = labels[:, :, i]
 
-                        # data
-                        dst_img = self.transform(img)
-                        dst_img_path = os.path.join(
-                            self.dst_data_dir,
-                            self.dst_prefix + "Zebrafish_" + f"{basename}.png"
-                        )
-                        cv2.imwrite(dst_img_path, dst_img)
-
-                        # label
-                        dst_label_uint16 = self.transform(label)
-                        # npy
-                        dst_arr_path = os.path.join(
-                            self.dst_label_dir,
-                            self.dst_prefix + "Zebrafish_" + f"{basename}.npy"
-                        )
-                        np.save(dst_arr_path, dst_label_uint16)
-                        # png
-                        vals_uint16 = [_ for _ in np.unique(dst_label_uint16) if
-                                       _ != 0][:255]
-                        dst_label_uint8 = np.zeros(shape=dst_label_uint16.shape,
-                                                   dtype=np.uint8)
-                        if len(vals_uint16) > 0:
-                            random.shuffle(vals_uint16)
-                            step = self.calc_step(len(vals_uint16))
-                            for j, val in enumerate(vals_uint16):
-                                dst_label_uint8[
-                                    dst_label_uint16 == val] = 255 - j * step
-
-                        dst_img_path = os.path.join(
-                            self.dst_label_dir,
-                            self.dst_prefix + "Zebrafish_" + f"{basename}.png"
-                        )
-                        cv2.imwrite(dst_img_path, dst_label_uint8)
+                        self.save_data(ori_data=img,
+                                       data_name=f"Zebrafish_{basename}")
+                        self.save_label(ori_label=label,
+                                        label_name=f"Zebrafish_{basename}")
 
 
 if __name__ == "__main__":

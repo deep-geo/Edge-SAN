@@ -1,5 +1,6 @@
 # Python version: 3.10
 numpy
+scipy
 opencv-python
 torch
 torchvision
@@ -7,3 +8,4 @@ albumentations
 tqdm
 matplotlib
 wandb
+h5py

@@ -1,6 +1,8 @@
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+import random
+import cv2
 import numpy as np
 
 from abc import abstractmethod
@@ -34,6 +36,35 @@ class Preprocess:
 
     def calc_step(self, num_colors: int):
         return calc_step(num_colors)
+
+    def save_data(self, ori_data: np.ndarray, data_name: str):
+        dst_img = self.transform(ori_data)
+        dst_img_path = os.path.join(
+            self.dst_data_dir,
+            self.dst_prefix + data_name + ".png"
+        )
+        cv2.imwrite(dst_img_path, dst_img)
+
+    def save_label(self, ori_label: np.ndarray, label_name: str):
+        label = ori_label.astype(np.uint16)
+        dst_label_uint16 = self.transform(label)
+
+        # npy
+        dst_arr_path = os.path.join(self.dst_label_dir,
+                                    self.dst_prefix + label_name + ".npy")
+        np.save(dst_arr_path, dst_label_uint16)
+
+        # png
+        vals_uint16 = [_ for _ in np.unique(dst_label_uint16) if _ != 0][:255]
+        dst_label_uint8 = np.zeros(shape=dst_label_uint16.shape, dtype=np.uint8)
+        if len(vals_uint16) > 0:
+            random.shuffle(vals_uint16)
+            step = self.calc_step(len(vals_uint16))
+            for j, val in enumerate(vals_uint16):
+                dst_label_uint8[dst_label_uint16 == val] = 255 - j * step
+        dst_img_path = os.path.join(self.dst_label_dir,
+                                    self.dst_prefix + label_name + ".png")
+        cv2.imwrite(dst_img_path, dst_label_uint8)
 
     @abstractmethod
     def process(self):
