@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=1e-4, help="learning rate")
     parser.add_argument("--resume", type=str, default=None, help="checkpoint or run_name to resume")
     parser.add_argument("--model_type", type=str, default="vit_b", help="sam model_type")
-    parser.add_argument("--sam_checkpoint", type=str, default="pretrain_model/sam-med2d_b.pth", help="sam checkpoint")
+    parser.add_argument("--sam_checkpoint", type=str, default=None, help="sam checkpoint")
     parser.add_argument("--boxes_prompt", action='store_true', help="use boxes prompt")
     parser.add_argument("--point_num", type=int, default=1, help="point num")
     parser.add_argument("--iter_point", type=int, default=8, help="point iterations")
