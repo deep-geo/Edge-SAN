@@ -467,8 +467,20 @@ def main(args):
     unsupervised_schedular = None
     if args.activate_unsupervised:
         dst_unsupervised_root = os.path.join(run_dir, "unsupervised")
-        os.makedirs(dst_unsupervised_root)
-        os.symlink(args.unsupervised_dir, os.path.join(dst_unsupervised_root, "data"))
+        dst_unsupervised_data_dir = os.path.join(dst_unsupervised_root, "data")
+        os.makedirs(dst_unsupervised_data_dir, exist_ok=True)
+        data_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
+        print("unsupervised quantity: ", len(data_paths))
+        for path in data_paths:
+            img = cv2.imread(path)
+            transform = get_transform(args.image_size, img.shape[0], img.shape[1])
+            dst_img = transform(image=img)["image"]
+            dst_path = os.path.join(dst_unsupervised_data_dir,
+                                    os.path.basename(path))
+            cv2.imwrite(dst_path, dst_img)
+
+        generate_unsupervised(args, model, dst_unsupervised_root)
+
         unsupervised_schedular = Schedular(
             schedular_dir=run_dir,
             current_epoch=0,
@@ -477,7 +489,7 @@ def main(args):
             end_epoch=None
         )
 
-    if args.activate_unsupervised:
+    if args.activate_unsupervised and resume_epoch >= args.unsupervised_start_epoch:
         print("\nGenerating unsupervised dataset...")
         unsupervised_root = os.path.join(run_dir, "unsupervised")
         generate_unsupervised(args, model, unsupervised_root)

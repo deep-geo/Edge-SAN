@@ -151,64 +151,74 @@ class TrainingDataset(Dataset):
         Returns:
             dict: A dictionary containing the sample data.
         """
+        while True:
+            image_input = {}
+            try:
+                image = cv2.imread(self.image_paths[index])
+                image = (image - self.pixel_mean) / self.pixel_std
+            except:
+                print(self.image_paths[index])
 
-        image_input = {}
-        try:
-            image = cv2.imread(self.image_paths[index])
-            image = (image - self.pixel_mean) / self.pixel_std
-        except:
-            print(self.image_paths[index])
+            h, w, _ = image.shape
+            transforms = A.Compose([ToTensorV2(p=1.0)], p=1.)
 
-        h, w, _ = image.shape
-        transforms = A.Compose([ToTensorV2(p=1.0)], p=1.)
-    
-        masks_list = []
-        boxes_list = []
-        point_coords_list, point_labels_list = [], []
-        # mask_path = random.choices(self.label_paths[index], k=self.mask_num)
+            masks_list = []
+            boxes_list = []
+            point_coords_list, point_labels_list = [], []
+            # mask_path = random.choices(self.label_paths[index], k=self.mask_num)
 
-        mask_path = self.label_paths[index]
-        original_mask = np.load(mask_path)
-        mask_vals = [_ for _ in np.unique(original_mask) if _ != 0]
-        choices_nuclei = random.choices(mask_vals, k=self.mask_num)
+            mask_path = self.label_paths[index]
+            original_mask = np.load(mask_path)
+            mask_vals = [_ for _ in np.unique(original_mask) if _ != 0]
+            if not mask_vals:
+                index = random.choice(range(self.__len__()))
+                continue
+            choices_nuclei = random.choices(mask_vals, k=self.mask_num)
 
-        for mask_val in choices_nuclei:
-            pre_mask = original_mask.copy()
+            for mask_val in choices_nuclei:
+                pre_mask = original_mask.copy()
 
-            # 只考虑当前细胞核编号，其它编号细胞核都按照背景处理
-            pre_mask[pre_mask != mask_val] = 0.0
-            pre_mask[pre_mask == mask_val] = 1.0
+                # 只考虑当前细胞核编号，其它编号细胞核都按照背景处理
+                pre_mask[pre_mask != mask_val] = 0.0
+                pre_mask[pre_mask == mask_val] = 1.0
 
-            augments = transforms(image=image, mask=pre_mask)
-            image_tensor, mask_tensor = augments['image'], augments['mask'].to(
-                torch.int64)
+                try:
+                    augments = transforms(image=image, mask=pre_mask)
+                except:
+                    print("++++++++++++++")
+                    print(image.shape, pre_mask.shape)
+                    print(self.image_paths[index])
+                    print(self.label_paths[index])
+                    exit()
+                image_tensor, mask_tensor = augments['image'], augments['mask'].to(
+                    torch.int64)
 
-            boxes = get_boxes_from_mask(mask_tensor)
-            point_coords, point_label = init_point_sampling(mask_tensor,
-                                                            self.point_num)
+                boxes = get_boxes_from_mask(mask_tensor)
+                point_coords, point_label = init_point_sampling(mask_tensor,
+                                                                self.point_num)
 
-            masks_list.append(mask_tensor)
-            boxes_list.append(boxes)
-            point_coords_list.append(point_coords)
-            point_labels_list.append(point_label)
+                masks_list.append(mask_tensor)
+                boxes_list.append(boxes)
+                point_coords_list.append(point_coords)
+                point_labels_list.append(point_label)
 
-        mask = torch.stack(masks_list, dim=0)
-        boxes = torch.stack(boxes_list, dim=0)
-        point_coords = torch.stack(point_coords_list, dim=0)
-        point_labels = torch.stack(point_labels_list, dim=0)
+            mask = torch.stack(masks_list, dim=0)
+            boxes = torch.stack(boxes_list, dim=0)
+            point_coords = torch.stack(point_coords_list, dim=0)
+            point_labels = torch.stack(point_labels_list, dim=0)
 
-        image_input["image"] = image_tensor.unsqueeze(0)
-        image_input["label"] = mask.unsqueeze(1)
-        image_input["boxes"] = boxes
-        image_input["point_coords"] = point_coords
-        image_input["point_labels"] = point_labels
+            image_input["image"] = image_tensor.unsqueeze(0)
+            image_input["label"] = mask.unsqueeze(1)
+            image_input["boxes"] = boxes
+            image_input["point_coords"] = point_coords
+            image_input["point_labels"] = point_labels
 
-        image_name = self.image_paths[index].split('/')[-1]
-        if self.requires_name:
-            image_input["name"] = image_name
-            return image_input
-        else:
-            return image_input
+            image_name = self.image_paths[index].split('/')[-1]
+            if self.requires_name:
+                image_input["name"] = image_name
+                return image_input
+            else:
+                return image_input
 
     def __len__(self):
         return len(self.image_paths)
