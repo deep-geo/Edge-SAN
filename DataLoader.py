@@ -68,7 +68,7 @@ class TestingDataset(Dataset):
             print(self.image_paths[index])
 
         mask_val, mask_path = self.label_paths[index]
-        ori_np_mask = np.load(mask_path)
+        ori_np_mask = np.load(mask_path).astype(np.float32)
         ori_np_mask[ori_np_mask != mask_val] = 0
         ori_np_mask[ori_np_mask == mask_val] = 1
 
