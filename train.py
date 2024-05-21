@@ -59,6 +59,7 @@ def parse_args():
     parser.add_argument("--prompt_path", type=str, default=None, help="fix prompt path")
     parser.add_argument("--save_pred", action='store_true', help="save result")
     parser.add_argument("--activate_unsupervised", action="store_true", help="activate unsupervised")
+    parser.add_argument("--unsupervised_only", action="store_true", help="activate unsupervised")
     parser.add_argument("--unsupervised_dir", type=str, help="dir cointaining unsupervised data")
     parser.add_argument("--unsupervised_start_epoch", type=int, default=0, help="epoch to start generating unsupervised dataset")
     parser.add_argument("--unsupervised_step", type=int, default=None, help="step to update unsupervised dataset")
@@ -423,8 +424,6 @@ def main(args):
     run_dir = os.path.join(args.work_dir, "models", args.run_name)
     os.makedirs(run_dir, exist_ok=True)
 
-    args.split_paths = [_ for _ in args.split_paths if _]
-
     if args.lr_scheduler:
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10], gamma=0.5)
         print('*******Use MultiStepLR')
@@ -496,8 +495,10 @@ def main(args):
         unsupervised_root = os.path.join(run_dir, "unsupervised")
         generate_unsupervised(args, model, unsupervised_root)
         unsupervised_split_path = os.path.join(unsupervised_root, "split.json")
+        split_paths = [unsupervised_split_path] if args.unsupervised_only else \
+            args.split_paths + [unsupervised_split_path]
         train_dataset = TrainingDataset(
-            split_paths=args.split_paths + [unsupervised_split_path],
+            split_paths=split_paths,
             point_num=1,  # todo 1?
             mask_num=args.mask_num,
             requires_name=False
