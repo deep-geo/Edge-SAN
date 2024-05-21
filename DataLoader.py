@@ -157,7 +157,9 @@ class TrainingDataset(Dataset):
                 image = cv2.imread(self.image_paths[index])
                 image = (image - self.pixel_mean) / self.pixel_std
             except:
-                print(self.image_paths[index])
+                print("read image error: ", self.image_paths[index])
+                index = random.choice(range(self.__len__()))
+                continue
 
             h, w, _ = image.shape
             transforms = A.Compose([ToTensorV2(p=1.0)], p=1.)
@@ -182,14 +184,7 @@ class TrainingDataset(Dataset):
                 pre_mask[pre_mask != mask_val] = 0.0
                 pre_mask[pre_mask == mask_val] = 1.0
 
-                try:
-                    augments = transforms(image=image, mask=pre_mask)
-                except:
-                    print("++++++++++++++")
-                    print(image.shape, pre_mask.shape)
-                    print(self.image_paths[index])
-                    print(self.label_paths[index])
-                    exit()
+                augments = transforms(image=image, mask=pre_mask)
                 image_tensor, mask_tensor = augments['image'], augments['mask'].to(
                     torch.int64)
 

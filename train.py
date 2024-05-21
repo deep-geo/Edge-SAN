@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument("--num_workers", type=int, default=8, help="Dataloader workers")
     parser.add_argument("--image_size", type=int, default=256, help="image_size")
     parser.add_argument("--mask_num", type=int, default=5, help="get mask number")
-    parser.add_argument("--split_paths", nargs='+', help="path list of the split json files")
+    parser.add_argument("--split_paths", nargs='+', default=[], help="path list of the split json files")
     parser.add_argument("--metrics", nargs='+',
                         default=['iou', 'dice', 'precision', 'f1_score', 'recall', 'specificity', 'accuracy',
                                  'hausdorff_distance'], help="metrics")
@@ -422,6 +422,8 @@ def main(args):
 
     run_dir = os.path.join(args.work_dir, "models", args.run_name)
     os.makedirs(run_dir, exist_ok=True)
+
+    args.split_paths = [_ for _ in args.split_paths if _]
 
     if args.lr_scheduler:
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10], gamma=0.5)
