@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import wandb
 
-from segment_anything import sam_model_registry, SamPredictor
+from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
@@ -133,62 +133,61 @@ def prompt_and_decoder(args, batched_input, model, image_embeddings,
 @torch.no_grad()
 def generate_unsupervised(args, model, dst_unsupervised_root: str):
     model.eval()
-    dataset = UnsupervisedDataset(data_root=dst_unsupervised_root, ext="png",
-                                  dst_size=args.image_size)
-    dataloader = DataLoader(dataset=dataset, batch_size=args.batch_size,
-                            shuffle=False, num_workers=args.num_workers)
+    generator = SamAutomaticMaskGenerator(
+        model=model,
+        pred_iou_thresh=0.45,
+        stability_score_thresh=0.80,
+        stability_score_offset=1.0,
+        box_nms_thresh=0.7,
+        min_mask_region_area=10,
+        output_mode="binary_mask"
+    )
+    dst_data_dir = os.path.join(dst_unsupervised_root, "data")
+    dst_label_dir = os.path.join(dst_unsupervised_root, "label")
+    os.makedirs(dst_data_dir, exist_ok=True)
+    os.makedirs(dst_label_dir, exist_ok=True)
 
-    label_dir = os.path.join(dst_unsupervised_root, "label")
-    os.makedirs(label_dir, exist_ok=True)
+    img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
 
-    # generate semantic mask
-    mask_paths = []
-    semantic_suffix = "_semantic"
-    for batched_input in tqdm(dataloader):
-        batched_input = to_device(batched_input, args.device)
-        batched_input["point_coords"] = None
-        image_embeddings = model.image_encoder(batched_input["image"])
-        masks, _, _ = prompt_and_decoder(args, batched_input, model, image_embeddings)
-        for b in range(masks.shape[0]):
-            image_path = batched_input["image_path"][b]
-            original_size = batched_input["original_size"][0][b], batched_input["original_size"][1][b]
-            mask = masks[b, :, :, :]
-            # todo semantic to instance
-            mask_name = os.path.basename(image_path)[:-4] + f"{semantic_suffix}.png"
-            save_masks(
-                preds=mask,
-                save_path=label_dir,
-                mask_name=mask_name,
-                image_size=args.image_size,
-                original_size=original_size
-            )
-            mask_paths.append(os.path.join(label_dir, mask_name))
+    for path in tqdm(img_paths, desc="Generating unsupervised mask"):
+        print("path: ", path)
+        image = cv2.imread(path)
+        if image is None:
+            print(f"Could not load '{path}' as an image, skipping...")
+            continue
 
-    # convert semantic mask to instance mask
-    for mask_path in mask_paths:
-        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-        label_uint16 = semantic2instances(mask)
+        # data
+        transform = get_transform(args.image_size, image.shape[0], image.shape[1])
+        dst_img = transform(image=image)["image"]
+        dst_path = os.path.join(dst_data_dir, os.path.basename(path))
+        cv2.imwrite(dst_path, dst_img)
 
-        basename = os.path.basename(mask_path)[:-len( f"{semantic_suffix}.png")]
-        inst_arr_path = os.path.join(label_dir, f"{basename}.npy")
-        inst_img_path = os.path.join(label_dir, f"{basename}.png")
+        # mask
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        masks = generator.generate(image)
+        arr = np.zeros(shape=image.shape, dtype=np.uint16)
+        for i, mask_data in enumerate(masks):
+            mask = mask_data["segmentation"]
+            arr[mask] = i + 1
 
-        transform = get_transform(args.image_size, mask.shape[0], mask.shape[1])
-        dst_label_uint16 = transform(image=label_uint16)["image"]
+        basename = os.path.basename(path)[:-4]
+        arr_path = os.path.join(dst_label_dir, f"{basename}.npy")
+        img_path = os.path.join(dst_label_dir, f"{basename}.png")
 
         # npy
-        np.save(inst_arr_path, dst_label_uint16)
+        dst_arr = transform(image=arr)["image"]
+        np.save(arr_path, dst_arr)
 
         # png
-        vals_uint16 = [_ for _ in np.unique(dst_label_uint16) if _ != 0][:255]
-        dst_label_uint8 = np.zeros(shape=dst_label_uint16.shape, dtype=np.uint8)
+        vals_uint16 = [_ for _ in np.unique(dst_arr) if _ != 0][:255]
+        dst_label_uint8 = np.zeros(shape=dst_arr.shape, dtype=np.uint8)
         if len(vals_uint16) > 0:
             random.shuffle(vals_uint16)
             step = calc_step(len(vals_uint16))
             for j, val in enumerate(vals_uint16):
-                dst_label_uint8[dst_label_uint16 == val] = 255 - j * step
+                dst_label_uint8[dst_arr == val] = 255 - j * step
 
-        cv2.imwrite(inst_img_path, dst_label_uint8)
+        cv2.imwrite(img_path, dst_label_uint8)
 
     split_dataset(data_root=dst_unsupervised_root, ext="png", test_size=0.0)
 
@@ -446,7 +445,7 @@ def main(args):
     resume_epoch = 0
     if resume_chkpt:
         with open(resume_chkpt, "rb") as f:
-            checkpoint = torch.load(f)
+            checkpoint = torch.load(f, map_location=args.device)
             model.load_state_dict(checkpoint['model'])
             optimizer.load_state_dict(checkpoint['optimizer'].state_dict())
             resume_epoch = checkpoint["epoch"]
@@ -470,15 +469,6 @@ def main(args):
         dst_unsupervised_root = os.path.join(run_dir, "unsupervised")
         dst_unsupervised_data_dir = os.path.join(dst_unsupervised_root, "data")
         os.makedirs(dst_unsupervised_data_dir, exist_ok=True)
-        data_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
-        print("unsupervised quantity: ", len(data_paths))
-        for path in data_paths:
-            img = cv2.imread(path)
-            transform = get_transform(args.image_size, img.shape[0], img.shape[1])
-            dst_img = transform(image=img)["image"]
-            dst_path = os.path.join(dst_unsupervised_data_dir,
-                                    os.path.basename(path))
-            cv2.imwrite(dst_path, dst_img)
 
         generate_unsupervised(args, model, dst_unsupervised_root)
 
@@ -599,4 +589,5 @@ def main(args):
 
 if __name__ == '__main__':
     args = parse_args()
+    args.encoder_adapter = True
     main(args)

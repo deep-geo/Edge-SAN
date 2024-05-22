@@ -67,7 +67,12 @@ parser.add_argument(
     help="use adapter"
 )
 
-parser.add_argument("--device", type=str, default="cuda", help="The device to run generation on.")
+parser.add_argument(
+    "--device",
+    type=str,
+    default="cuda",
+    help="The device to run generation on."
+)
 
 parser.add_argument(
     "--convert-to-rle",
@@ -208,6 +213,7 @@ def get_amg_kwargs(args):
 
 
 def main(args: argparse.Namespace) -> None:
+    args.encoder_adapter = True
     print("Loading model...")
     sam = sam_model_registry[args.model_type](args)
     _ = sam.to(device=args.device)
