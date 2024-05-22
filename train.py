@@ -150,7 +150,6 @@ def generate_unsupervised(args, model, dst_unsupervised_root: str):
     img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
 
     for path in tqdm(img_paths, desc="Generating unsupervised mask"):
-        print("path: ", path)
         image = cv2.imread(path)
         if image is None:
             print(f"Could not load '{path}' as an image, skipping...")
@@ -165,7 +164,7 @@ def generate_unsupervised(args, model, dst_unsupervised_root: str):
         # mask
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         masks = generator.generate(image)
-        arr = np.zeros(shape=image.shape, dtype=np.uint16)
+        arr = np.zeros(shape=(image.shape[0], image.shape[1]), dtype=np.uint16)
         for i, mask_data in enumerate(masks):
             mask = mask_data["segmentation"]
             arr[mask] = i + 1
@@ -481,9 +480,7 @@ def main(args):
         )
 
     if args.activate_unsupervised and resume_epoch >= args.unsupervised_start_epoch:
-        print("\nGenerating unsupervised dataset...")
         unsupervised_root = os.path.join(run_dir, "unsupervised")
-        generate_unsupervised(args, model, unsupervised_root)
         unsupervised_split_path = os.path.join(unsupervised_root, "split.json")
         split_paths = [unsupervised_split_path] if args.unsupervised_only else \
             args.split_paths + [unsupervised_split_path]
@@ -569,7 +566,6 @@ def main(args):
         if args.activate_unsupervised:
             unsupervised_schedular.step()
             if unsupervised_schedular.is_active():
-                print("\nGenerating unsupervised dataset...")
                 unsupervised_root = os.path.join(run_dir, "unsupervised")
                 generate_unsupervised(args, model, unsupervised_root)
                 unsupervised_split_path = os.path.join(unsupervised_root, "split.json")

@@ -48,7 +48,7 @@ def get_boxes_from_mask(mask, box_num=1, std = 0.1, max_pixel = 5):
     # Perturb each bounding box with noise
     noise_boxes = []
     for box in boxes:
-        y0, x0,  y1, x1  = box
+        y0, x0,  y1, x1 = box
         width, height = abs(x1 - x0), abs(y1 - y0)
         # Calculate the standard deviation and maximum noise value
         noise_std = min(width, height) * std
