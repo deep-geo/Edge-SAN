@@ -3,8 +3,10 @@
 
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-
+import os
 import cv2  # type: ignore
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 
@@ -29,6 +31,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--image_size",
+    type=int,
+    required=True,
+    help="Path to either a single input image or folder of images.",
+)
+
+parser.add_argument(
     "--output",
     type=str,
     required=True,
@@ -46,10 +55,16 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--checkpoint",
+    "--sam_checkpoint",
     type=str,
     required=True,
     help="The path to the SAM checkpoint to use for mask generation.",
+)
+
+parser.add_argument(
+    "--encoder_adapter",
+    action='store_true',
+    help="use adapter"
 )
 
 parser.add_argument("--device", type=str, default="cuda", help="The device to run generation on.")
@@ -194,7 +209,7 @@ def get_amg_kwargs(args):
 
 def main(args: argparse.Namespace) -> None:
     print("Loading model...")
-    sam = sam_model_registry[args.model_type](checkpoint=args.checkpoint)
+    sam = sam_model_registry[args.model_type](args)
     _ = sam.to(device=args.device)
     output_mode = "coco_rle" if args.convert_to_rle else "binary_mask"
     amg_kwargs = get_amg_kwargs(args)
