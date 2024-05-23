@@ -135,12 +135,11 @@ def generate_unsupervised(args, model, dst_unsupervised_root: str):
     model.eval()
     generator = SamAutomaticMaskGenerator(
         model=model,
-        pred_iou_thresh=0.45,
+        pred_iou_thresh=0.7,
         stability_score_thresh=0.80,
         stability_score_offset=1.0,
         box_nms_thresh=0.7,
-        min_mask_region_area=10,
-        output_mode="binary_mask"
+        min_mask_region_area=10
     )
     dst_data_dir = os.path.join(dst_unsupervised_root, "data")
     dst_label_dir = os.path.join(dst_unsupervised_root, "label")
