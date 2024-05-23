@@ -29,7 +29,6 @@ class PreprocessFluorescence(Preprocess):
         # data
         src_data_dir = os.path.join(self.src_root, "data")
         src_data_paths = glob.glob(os.path.join(src_data_dir, "*.png"))
-
         print("\nProcess data...")
         for path in tqdm.tqdm(src_data_paths):
             img = cv2.imread(path)

@@ -21,7 +21,6 @@ import glob
 import argparse
 import cv2
 import tqdm
-import ranom
 
 from preprocess import Preprocess
 
