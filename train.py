@@ -139,7 +139,8 @@ def generate_unsupervised(args, model, dst_unsupervised_root: str):
         stability_score_thresh=0.80,
         stability_score_offset=1.0,
         box_nms_thresh=0.7,
-        min_mask_region_area=10
+        min_mask_region_area=10,
+        points_per_batch=256
     )
     dst_data_dir = os.path.join(dst_unsupervised_root, "data")
     dst_label_dir = os.path.join(dst_unsupervised_root, "label")
