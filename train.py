@@ -4,27 +4,22 @@ import re
 import random
 import datetime
 import glob
-
-import cv2
 import numpy as np
 import torch
 import wandb
 
-from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
+from segment_anything import sam_model_registry
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
-from DataLoader import TrainingDataset, TestingDataset, UnsupervisedDataset, \
-    stack_dict_batched
+from DataLoader import TrainingDataset, TestingDataset, stack_dict_batched
 from utils import FocalDiceloss_IoULoss, get_logger, generate_point, \
-    setting_prompt_none, save_masks, semantic2instances, get_transform, calc_step
+    setting_prompt_none, save_masks
 from metrics import SegMetrics
 from tqdm import tqdm
 # from apex import amp
 from test import postprocess_masks
-from scheduler import Schedular
-from preprocess.split_dataset import split_dataset
-
+from unsupervised import Schedular, generate_unsupervised
 
 torch.set_default_dtype(torch.float32)
 max_num_chkpt = 3
@@ -128,67 +123,6 @@ def prompt_and_decoder(args, batched_input, model, image_embeddings,
     masks = F.interpolate(low_res_masks, (args.image_size, args.image_size),
                           mode="bilinear", align_corners=False)
     return masks, low_res_masks, iou_predictions
-
-
-@torch.no_grad()
-def generate_unsupervised(args, model, dst_unsupervised_root: str):
-    model.eval()
-    generator = SamAutomaticMaskGenerator(
-        model=model,
-        pred_iou_thresh=0.7,
-        stability_score_thresh=0.80,
-        stability_score_offset=1.0,
-        box_nms_thresh=0.7,
-        min_mask_region_area=10,
-        points_per_batch=256
-    )
-    dst_data_dir = os.path.join(dst_unsupervised_root, "data")
-    dst_label_dir = os.path.join(dst_unsupervised_root, "label")
-    os.makedirs(dst_data_dir, exist_ok=True)
-    os.makedirs(dst_label_dir, exist_ok=True)
-
-    img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
-
-    for path in tqdm(img_paths, desc="Generating unsupervised mask"):
-        image = cv2.imread(path)
-        if image is None:
-            print(f"Could not load '{path}' as an image, skipping...")
-            continue
-
-        # data
-        transform = get_transform(args.image_size, image.shape[0], image.shape[1])
-        dst_img = transform(image=image)["image"]
-        dst_path = os.path.join(dst_data_dir, os.path.basename(path))
-        cv2.imwrite(dst_path, dst_img)
-
-        # mask
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        masks = generator.generate(image)
-        arr = np.zeros(shape=(image.shape[0], image.shape[1]), dtype=np.uint16)
-        for i, mask_data in enumerate(masks):
-            mask = mask_data["segmentation"]
-            arr[mask] = i + 1
-
-        basename = os.path.basename(path)[:-4]
-        arr_path = os.path.join(dst_label_dir, f"{basename}.npy")
-        img_path = os.path.join(dst_label_dir, f"{basename}.png")
-
-        # npy
-        dst_arr = transform(image=arr)["image"]
-        np.save(arr_path, dst_arr)
-
-        # png
-        vals_uint16 = [_ for _ in np.unique(dst_arr) if _ != 0][:255]
-        dst_label_uint8 = np.zeros(shape=dst_arr.shape, dtype=np.uint8)
-        if len(vals_uint16) > 0:
-            random.shuffle(vals_uint16)
-            step = calc_step(len(vals_uint16))
-            for j, val in enumerate(vals_uint16):
-                dst_label_uint8[dst_arr == val] = 255 - j * step
-
-        cv2.imwrite(img_path, dst_label_uint8)
-
-    split_dataset(data_root=dst_unsupervised_root, ext="png", test_size=0.0)
 
 
 @torch.no_grad()
