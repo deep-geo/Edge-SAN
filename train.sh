@@ -18,8 +18,8 @@ python train.py \
 --boxes_prompt \
 --point_num 1 \
 --iter_point 8 \
---multimask \
 --encoder_adapter \
+#--multimask \
 #--prompt_path
 #--save_pred
 #--lr_scheduler \
