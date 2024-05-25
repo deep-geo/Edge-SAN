@@ -21,8 +21,12 @@ def parse_train_args():
 
     parser.add_argument("--work_dir", type=str, default="workdir",
                         help="work dir")
-    parser.add_argument("--run_name", type=str, default=f"run-{str(datetime.datetime.now())[:19].replace(' ', '_').replace(':', '-')}",
-                        help="run model name")
+    parser.add_argument(
+        "--run_name",
+        type=str,
+        default=f"run-{str(datetime.datetime.now())[:19].replace(' ', '_').replace(':', '-')}",
+        help="run model name"
+    )
     parser.add_argument("--seed", type=int, default=None,
                         help="number of epochs")
     parser.add_argument("--epochs", type=int, default=100000,
@@ -105,7 +109,8 @@ def get_boxes_from_mask(mask, box_num=1, std = 0.1, max_pixel = 5):
         std: Standard deviation of the noise, default is 0.1.
         max_pixel: Maximum noise pixel value, default is 5.
     Returns:
-        noise_boxes: Bounding boxes after noise perturbation, returned as a torch.Tensor.
+        noise_boxes: Bounding boxes after noise perturbation,
+            returned as a torch.Tensor.
     """
     if isinstance(mask, torch.Tensor):
         mask = mask.numpy()
@@ -148,19 +153,23 @@ def get_boxes_from_mask(mask, box_num=1, std = 0.1, max_pixel = 5):
         x0, y0 = x0 + noise_x, y0 + noise_y
         x1, y1 = x1 + noise_x, y1 + noise_y
         noise_boxes.append((x0, y0, x1, y1))
+
     return torch.as_tensor(noise_boxes, dtype=torch.float)
 
 
-def select_random_points(pr, gt, point_num = 9):
+def select_random_points(pr, gt, point_num=9):
     """
-    Selects random points from the predicted and ground truth masks and assigns labels to them.
+    Selects random points from the predicted and ground truth masks and
+    assigns labels to them.
     Args:
-        pred (torch.Tensor): Predicted mask tensor.
+        pr (torch.Tensor): Predicted mask tensor.
         gt (torch.Tensor): Ground truth mask tensor.
         point_num (int): Number of random points to select. Default is 9.
     Returns:
-        batch_points (np.array): Array of selected points coordinates (x, y) for each batch.
-        batch_labels (np.array): Array of corresponding labels (0 for background, 1 for foreground) for each batch.
+        batch_points (np.array): Array of selected points coordinates (x, y)
+            for each batch.
+        batch_labels (np.array): Array of corresponding labels
+            (0 for background, 1 for foreground) for each batch.
     """
     pred, gt = pr.data.cpu().numpy(), gt.data.cpu().numpy()
     error = np.zeros_like(pred)
@@ -207,7 +216,8 @@ def init_point_sampling(mask, get_point=1):
         num_points (int): Number of points to sample. Default is 1.
     Returns:
         coords (torch.Tensor): Tensor containing the sampled points' coordinates (x, y).
-        labels (torch.Tensor): Tensor containing the corresponding labels (0 for background, 1 for foreground).
+        labels (torch.Tensor): Tensor containing the corresponding labels
+            (0 for background, 1 for foreground).
     """
     if isinstance(mask, torch.Tensor):
         mask = mask.numpy()
@@ -228,7 +238,8 @@ def init_point_sampling(mask, get_point=1):
             index = np.random.randint(bg_size)
             fg_coord = bg_coords[index]
             label = 0
-        return torch.as_tensor([fg_coord.tolist()], dtype=torch.float), torch.as_tensor([label], dtype=torch.int)
+        return (torch.as_tensor([fg_coord.tolist()], dtype=torch.float),
+                torch.as_tensor([label], dtype=torch.int))
     else:
         num_fg = get_point // 2
         num_bg = get_point - num_fg
@@ -239,24 +250,36 @@ def init_point_sampling(mask, get_point=1):
         coords = np.concatenate([fg_coords, bg_coords], axis=0)
         labels = np.concatenate([np.ones(num_fg), np.zeros(num_bg)]).astype(int)
         indices = np.random.permutation(get_point)
-        coords, labels = torch.as_tensor(coords[indices], dtype=torch.float), torch.as_tensor(labels[indices], dtype=torch.int)
+        coords, labels = (torch.as_tensor(coords[indices], dtype=torch.float),
+                          torch.as_tensor(labels[indices], dtype=torch.int))
         return coords, labels
     
 
 def train_transforms(img_size, ori_h, ori_w):
     transforms = []
     if ori_h < img_size and ori_w < img_size:
-        transforms.append(A.PadIfNeeded(min_height=img_size, min_width=img_size, border_mode=cv2.BORDER_CONSTANT, value=(0, 0, 0)))
+        transforms.append(
+            A.PadIfNeeded(
+                min_height=img_size,
+                min_width=img_size,
+                border_mode=cv2.BORDER_CONSTANT,
+                value=(0, 0, 0)
+            )
+        )
     else:
-        transforms.append(A.Resize(int(img_size), int(img_size), interpolation=cv2.INTER_NEAREST))
+        transforms.append(
+            A.Resize(int(img_size), int(img_size),
+                     interpolation=cv2.INTER_NEAREST)
+        )
     transforms.append(ToTensorV2(p=1.0))
+
     return A.Compose(transforms, p=1.)
 
 
 def get_logger(filename, verbosity=1, name=None):
     level_dict = {0: logging.DEBUG, 1: logging.INFO, 2: logging.WARNING}
     formatter = logging.Formatter(
-        "[%(asctime)s][%(filename)s][line:%(lineno)d][%(levelname)s] %(message)s"
+       "[%(asctime)s][%(filename)s][line:%(lineno)d][%(levelname)s] %(message)s"
     )
     logger = logging.getLogger(name)
     logger.setLevel(level_dict[verbosity])
@@ -282,7 +305,7 @@ def generate_point(masks, labels, low_res_masks, batched_input, point_num):
     low_res_masks_clone = low_res_masks.clone()
     low_res_masks_logist = torch.sigmoid(low_res_masks_clone)
 
-    points, point_labels = select_random_points(masks_binary, labels, point_num = point_num)
+    points, point_labels = select_random_points(masks_binary, labels, point_num=point_num)
     batched_input["mask_inputs"] = low_res_masks_logist
     batched_input["point_coords"] = torch.as_tensor(points)
     batched_input["point_labels"] = torch.as_tensor(point_labels)
@@ -304,7 +327,9 @@ def draw_boxes(img, boxes):
     return img_copy
 
 
-def save_masks(preds, save_path, mask_name, image_size, original_size, pad=None,  boxes=None, points=None, visual_prompt=False):
+def save_masks(preds, save_path, mask_name, image_size, original_size, pad=None,
+               boxes=None, points=None, visual_prompt=False):
+
     ori_h, ori_w = original_size
 
     preds = torch.sigmoid(preds)
@@ -334,24 +359,33 @@ def save_masks(preds, save_path, mask_name, image_size, original_size, pad=None,
             mask = draw_boxes(mask, boxes)
 
         if points is not None:
-            point_coords, point_labels = points[0].squeeze(0).cpu().numpy(),  points[1].squeeze(0).cpu().numpy()
+            point_coords, point_labels = (points[0].squeeze(0).cpu().numpy(),
+                                          points[1].squeeze(0).cpu().numpy())
             point_coords = point_coords.tolist()
             if pad is not None:
-                ori_points = [[int((x * ori_w / image_size)) , int((y * ori_h / image_size))]if l==0 else [x - pad[1], y - pad[0]]  for (x, y), l in zip(point_coords, point_labels)]
+                ori_points = [
+                    [int((x * ori_w / image_size)) , int((y * ori_h / image_size))]
+                    if l == 0 else [x - pad[1], y - pad[0]]
+                    for (x, y), l in zip(point_coords, point_labels)
+                ]
             else:
-                ori_points = [[int((x * ori_w / image_size)) , int((y * ori_h / image_size))] for x, y in point_coords]
+                ori_points = [
+                    [int((x * ori_w / image_size)) , int((y * ori_h / image_size))]
+                    for x, y in point_coords
+                ]
 
             for point, label in zip(ori_points, point_labels):
                 x, y = map(int, point)
                 color = (0, 255, 0) if label == 1 else (0, 0, 255)
                 mask[y, x] = color
-                cv2.drawMarker(mask, (x, y), color, markerType=cv2.MARKER_CROSS , markerSize=7, thickness=2)  
+                cv2.drawMarker(mask, (x, y), color, markerType=cv2.MARKER_CROSS,
+                               markerSize=7, thickness=2)
+
     os.makedirs(save_path, exist_ok=True)
     mask_path = os.path.join(save_path, f"{mask_name}")
     cv2.imwrite(mask_path, np.uint8(mask))
 
 
-#Loss funcation
 class FocalLoss(nn.Module):
     def __init__(self, gamma=2.0, alpha=0.25):
         super(FocalLoss, self).__init__()
@@ -464,7 +498,7 @@ class BCE_Loss(nn.Module):
 class BCE_Diceloss_IoULoss(nn.Module):
     
     def __init__(self, weight=1.0, iou_scale=1.0):
-        super(FocalDiceloss_IoULoss, self).__init__()
+        super(BCE_Diceloss_IoULoss, self).__init__()
         self.weight = weight
         self.iou_scale = iou_scale
         self.bce_loss = BCE_Loss()
@@ -499,11 +533,9 @@ def semantic2instances(gray: np.ndarray) -> np.ndarray:
 
 def get_transform(dst_size: int, ori_h: int, ori_w: int):
     if ori_h < dst_size and ori_w < dst_size:
-        t = A.PadIfNeeded(
-            min_height=dst_size, min_width=dst_size,
-            position="center", border_mode=cv2.BORDER_CONSTANT,
-            value=0
-        )
+        t = A.PadIfNeeded(min_height=dst_size, min_width=dst_size,
+                          position="center", border_mode=cv2.BORDER_CONSTANT,
+                          value=0)
     else:
         t = A.Resize(dst_size, dst_size, interpolation=cv2.INTER_NEAREST)
     return t
