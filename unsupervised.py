@@ -88,8 +88,8 @@ def generate_unsupervised(args, model, dst_unsupervised_root: str):
     model.eval()
     generator = SamAutomaticMaskGenerator(
         model=model,
-        pred_iou_thresh=0.7,
-        stability_score_thresh=0.80,
+        pred_iou_thresh=args.unsupervised_pred_iou_thresh,
+        stability_score_thresh=args.unsupervised_stability_score_thresh,
         stability_score_offset=1.0,
         box_nms_thresh=0.7,
         min_mask_region_area=10,
