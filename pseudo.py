@@ -84,7 +84,7 @@ class Schedular:
 
 
 @torch.no_grad()
-def generate_unsupervised(args, model, dst_unsupervised_root: str):
+def generate_pseudo(args, model, pseudo_root: str):
     model.eval()
     generator = SamAutomaticMaskGenerator(
         model=model,
@@ -95,10 +95,10 @@ def generate_unsupervised(args, model, dst_unsupervised_root: str):
         min_mask_region_area=10,
         points_per_batch=256
     )
-    dst_data_dir = os.path.join(dst_unsupervised_root, "data")
-    dst_label_dir = os.path.join(dst_unsupervised_root, "label")
-    os.makedirs(dst_data_dir, exist_ok=True)
-    os.makedirs(dst_label_dir, exist_ok=True)
+    pseudo_data_dir = os.path.join(pseudo_root, "data")
+    pseudo_label_dir = os.path.join(pseudo_root, "label")
+    os.makedirs(pseudo_data_dir, exist_ok=True)
+    os.makedirs(pseudo_label_dir, exist_ok=True)
 
     img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
 
@@ -111,7 +111,7 @@ def generate_unsupervised(args, model, dst_unsupervised_root: str):
         # data
         transform = get_transform(args.image_size, image.shape[0], image.shape[1])
         dst_img = transform(image=image)["image"]
-        dst_path = os.path.join(dst_data_dir, os.path.basename(path))
+        dst_path = os.path.join(pseudo_data_dir, os.path.basename(path))
         cv2.imwrite(dst_path, dst_img)
 
         # mask
@@ -123,8 +123,8 @@ def generate_unsupervised(args, model, dst_unsupervised_root: str):
             arr[mask] = i + 1
 
         basename = os.path.basename(path)[:-4]
-        arr_path = os.path.join(dst_label_dir, f"{basename}.npy")
-        img_path = os.path.join(dst_label_dir, f"{basename}.png")
+        arr_path = os.path.join(pseudo_label_dir, f"{basename}.npy")
+        img_path = os.path.join(pseudo_label_dir, f"{basename}.png")
 
         # npy
         dst_arr = transform(image=arr)["image"]
@@ -141,4 +141,4 @@ def generate_unsupervised(args, model, dst_unsupervised_root: str):
 
         cv2.imwrite(img_path, dst_label_uint8)
 
-    split_dataset(data_root=dst_unsupervised_root, ext="png", test_size=0.0)
+    split_dataset(data_root=pseudo_root, ext="png", test_size=0.0)
