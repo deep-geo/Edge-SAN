@@ -177,11 +177,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
     pseudo_weights = None
 
-    nn = 0
     for batch, batched_input in enumerate(train_loader):
-        nn += 1
-        if nn > 5:
-            break
 
         batched_input = stack_dict_batched(batched_input)
         batched_input = to_device(batched_input, args.device)
