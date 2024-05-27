@@ -86,6 +86,7 @@ def eval_model(args, model, test_loader):
     criterion = FocalDiceloss_IoULoss()
     model.eval()
     test_loss = []
+    miss_rate = []
     test_iter_metrics = [0] * len(args.metrics)
     test_metrics = {}
     prompt_dict = {}
@@ -141,6 +142,12 @@ def eval_model(args, model, test_loader):
 
         masks, pad = postprocess_masks(low_res_masks, args.image_size,
                                        original_size)
+
+        miss_rate.append(
+            (torch.sum(low_res_masks, dim=(2, 3)) == 0).sum() /
+            low_res_masks.shape[0]
+        )
+
         if args.save_pred:
             save_masks(masks, save_path, img_name, args.image_size,
                        original_size, pad, batched_input.get("boxes", None),
@@ -150,16 +157,16 @@ def eval_model(args, model, test_loader):
         test_loss.append(loss.item())
 
         test_batch_metrics = SegMetrics(masks, ori_labels, args.metrics)
-        test_batch_metrics = [float('{:.4f}'.format(metric)) for metric in
-                              test_batch_metrics]
+        test_batch_metrics = [round(metric, 4) for metric in test_batch_metrics]
 
         for j in range(len(args.metrics)):
             test_iter_metrics[j] += test_batch_metrics[j]
 
     test_iter_metrics = [metric / l for metric in test_iter_metrics]
     average_loss = np.mean(test_loss)
+    average_miss_rate = np.mean(miss_rate)
 
-    return average_loss, test_iter_metrics
+    return average_loss, test_iter_metrics, average_miss_rate
 
 
 def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
@@ -168,7 +175,13 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
     train_losses = []
     train_iter_metrics = [0] * len(args.metrics)
 
+    pseudo_weights = None
+
+    nn = 0
     for batch, batched_input in enumerate(train_loader):
+        nn += 1
+        if nn > 5:
+            break
 
         batched_input = stack_dict_batched(batched_input)
         batched_input = to_device(batched_input, args.device)
@@ -201,10 +214,11 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         masks, low_res_masks, iou_predictions = prompt_and_decoder(
             args, batched_input, model, image_embeddings, decoder_iter=False)
 
-        pseudos = (batched_input["pseudo"].unsqueeze(1).
-                   repeat(1, args.mask_num).reshape(-1))
-        pseudo_weights = torch.ones(size=pseudos.shape)
-        pseudo_weights[pseudos] = pseudo_schedular.pseudo_weight
+        if args.activate_unsupervised:
+            pseudos = (batched_input["pseudo"].unsqueeze(1).
+                       repeat(1, args.mask_num).reshape(-1))
+            pseudo_weights = torch.ones(size=pseudos.shape)
+            pseudo_weights[pseudos] = pseudo_schedular.pseudo_weight
 
         loss = criterion(masks, labels, iou_predictions, pseudo_weights)
         loss.backward(retain_graph=False)
@@ -294,7 +308,8 @@ def main(args):
     os.makedirs(run_dir, exist_ok=True)
 
     if args.lr_scheduler:
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10], gamma=0.5)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer, milestones=[5, 10], gamma=0.5)
         print('*******Use MultiStepLR')
 
     resume_chkpt = None
@@ -409,10 +424,11 @@ def main(args):
         average_loss = np.mean(train_losses)
 
         print("\nEvaluate model...")
-        average_test_loss, test_iter_metrics = eval_model(args, model, test_loader)
+        average_test_loss, test_iter_metrics, miss_rate = (
+            eval_model(args, model, test_loader))
 
         wandb.log({"Loss/train": average_loss, "Loss/test": average_test_loss})
-
+        wandb.log({"miss_rate": miss_rate})
         metrics_dict = dict(zip(metric_names, test_iter_metrics))
         wandb.log(metrics_dict)
 
@@ -444,26 +460,28 @@ def main(args):
                      'epoch': epoch + 1}
             torch.save(state, save_path)
 
-        if args.activate_unsupervised and pseudo_schedular.is_active():
-            pseudo_root = os.path.join(run_dir, "pseudo")
-            generate_pseudo(args, model, pseudo_root)
-            pseudo_split_path = os.path.join(pseudo_root, "split.json")
-            train_dataset_pseudo = TrainingDataset(
-                split_paths=pseudo_split_path,
-                point_num=1,
-                mask_num=args.mask_num,
-                requires_name=False,
-                is_pseudo=True
-            )
-            train_dataset = train_dataset_gt + train_dataset_pseudo
-            train_loader = DataLoader(train_dataset,
-                                      batch_size=args.batch_size,
-                                      shuffle=True,
-                                      num_workers=args.num_workers)
+        if args.activate_unsupervised:
+            wandb.log({"pseudo_weight": pseudo_schedular.pseudo_weight})
+            if pseudo_schedular.is_active():
+                pseudo_root = os.path.join(run_dir, "pseudo")
+                generate_pseudo(args, model, pseudo_root)
+                pseudo_split_path = os.path.join(pseudo_root, "split.json")
+                train_dataset_pseudo = TrainingDataset(
+                    split_paths=pseudo_split_path,
+                    point_num=1,
+                    mask_num=args.mask_num,
+                    requires_name=False,
+                    is_pseudo=True
+                )
+                train_dataset = train_dataset_gt + train_dataset_pseudo
+                train_loader = DataLoader(train_dataset,
+                                          batch_size=args.batch_size,
+                                          shuffle=True,
+                                          num_workers=args.num_workers)
 
 
 if __name__ == '__main__':
     args = parse_train_args()
     args.encoder_adapter = True
-    # args.activate_unsupervised = True
+    args.activate_unsupervised = True
     main(args)
