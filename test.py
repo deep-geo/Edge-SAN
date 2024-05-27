@@ -1,21 +1,15 @@
 from segment_anything import sam_model_registry
-import torch.nn as nn
 import torch
 import argparse
 import os
-from utils import FocalDiceloss_IoULoss, generate_point, save_masks
+from utils import FocalDiceloss_IoULoss, generate_point, save_masks, \
+    postprocess_masks
 from torch.utils.data import DataLoader
 from DataLoader import TestingDataset
 from metrics import SegMetrics
-import time
 from tqdm import tqdm
 import numpy as np
 from torch.nn import functional as F
-import logging
-import datetime
-import cv2
-import random
-import csv
 import json
 
 
@@ -58,28 +52,8 @@ def to_device(batch_input, device):
     return device_input
 
 
-def postprocess_masks(low_res_masks, image_size, original_size):
-    ori_h, ori_w = original_size
-    masks = F.interpolate(
-        low_res_masks,
-        (image_size, image_size),
-        mode="bilinear",
-        align_corners=False,
-        )
-    
-    if ori_h < image_size and ori_w < image_size:
-        top = torch.div((image_size - ori_h), 2, rounding_mode='trunc')  #(image_size - ori_h) // 2
-        left = torch.div((image_size - ori_w), 2, rounding_mode='trunc') #(image_size - ori_w) // 2
-        masks = masks[..., top : ori_h + top, left : ori_w + left]
-        pad = (top, left)
-    else:
-        masks = F.interpolate(masks, original_size, mode="bilinear", align_corners=False)
-        pad = None 
-    return masks, pad
-
-
 def prompt_and_decoder(args, batched_input, ddp_model, image_embeddings):
-    if  batched_input["point_coords"] is not None:
+    if batched_input["point_coords"] is not None:
         points = (batched_input["point_coords"], batched_input["point_labels"])
     else:
         points = None

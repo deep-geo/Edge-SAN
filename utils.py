@@ -560,3 +560,21 @@ def get_transform(dst_size: int, ori_h: int, ori_w: int):
     else:
         t = A.Resize(dst_size, dst_size, interpolation=cv2.INTER_NEAREST)
     return t
+
+
+def postprocess_masks(low_res_masks, image_size, original_size):
+    ori_h, ori_w = original_size
+    masks = F.interpolate(low_res_masks, (image_size, image_size),
+                          mode="bilinear", align_corners=False)
+
+    if ori_h < image_size and ori_w < image_size:
+        top = torch.div((image_size - ori_h), 2, rounding_mode='trunc')  #(image_size - ori_h) // 2
+        left = torch.div((image_size - ori_w), 2, rounding_mode='trunc') #(image_size - ori_w) // 2
+        masks = masks[..., top: ori_h + top, left: ori_w + left]
+        pad = (top, left)
+    else:
+        masks = F.interpolate(masks, original_size,
+                              mode="bilinear", align_corners=False)
+        pad = None
+
+    return masks, pad
