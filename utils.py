@@ -37,7 +37,7 @@ def parse_train_args():
                         help="Dataloader workers")
     parser.add_argument("--image_size", type=int, default=256,
                         help="image_size")
-    parser.add_argument("--mask_num", type=int, default=5,
+    parser.add_argument("--mask_num", type=int, default=8,
                         help="get mask number")
     parser.add_argument("--split_paths", nargs='+', default=[],
                         help="path list of the split json files")
