@@ -81,6 +81,18 @@ dst_prefix="zebrafish"
 echo -e "\n################# PROCESS zebrafish #################"
 python preprocess_zebrafish.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix || exit
 
+# MoNuSeg2018
+src_root="<path_to_MoNuSeg2018_src_root>"
+dst_prefix="MoNuSeg2018"
+echo -e "\n################# PROCESS MoNuSeg2018 #################"
+python preprocess_MoNuSeg2018.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix || exit
+
+# MoNuSeg2020
+src_root="<path_to_MoNuSeg2020_src_root>"
+dst_prefix="MoNuSeg2020"
+echo -e "\n################# PROCESS MoNuSeg2020 #################"
+python preprocess_MoNuSeg2020.py --src_root $src_root --dst_root $dst_root --dst_size $dst_size --dst_prefix $dst_prefix || exit
+
 
 # split dataset
 echo -e "\n>>>>>>>>>>>>>>>>>>>>> Split Datasets <<<<<<<<<<<<<<<<<<<<<<"
