@@ -21,12 +21,13 @@ python train.py \
 --encoder_adapter \
 --multimask \
 --activate_unsupervised \
---unsupervised_only \
 --unsupervised_dir "/root/autodl-tmp/datasets/SAM_nuclei/<unsupervised_root>" \
 --unsupervised_start_epoch 0 \
 --unsupervised_step 1 \
 --unsupervised_pred_iou_thresh 0.88 \
 --unsupervised_stability_score_thresh 0.95 \
+--unsupervised_weight_gr 0.1 \
+#--unsupervised_only \
 #--prompt_path
 #--save_pred
 #--lr_scheduler \
