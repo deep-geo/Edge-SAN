@@ -19,7 +19,7 @@ python train.py \
 --point_num 1 \
 --iter_point 8 \
 --encoder_adapter \
-#--multimask \
+--multimask \
 #--prompt_path
 #--save_pred
 #--lr_scheduler \

@@ -19,6 +19,7 @@ python train.py \
 --point_num 1 \
 --iter_point 8 \
 --encoder_adapter \
+--multimask \
 --activate_unsupervised \
 --unsupervised_only \
 --unsupervised_dir "/root/autodl-tmp/datasets/SAM_nuclei/<unsupervised_root>" \
@@ -26,7 +27,6 @@ python train.py \
 --unsupervised_step 1 \
 --unsupervised_pred_iou_thresh 0.88 \
 --unsupervised_stability_score_thresh 0.95 \
-#--multimask \
 #--prompt_path
 #--save_pred
 #--lr_scheduler \

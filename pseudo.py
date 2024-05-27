@@ -24,15 +24,15 @@ from segment_anything import SamAutomaticMaskGenerator
 from utils import get_transform, calc_step
 
 
-class Schedular:
+class PseudoSchedular:
 
     def __init__(self, schedular_dir: str, current_epoch: int, step: int,
-                 start_epoch: int = 0, end_epoch: int = None):
+                 start_epoch: int, pseudo_weight_gr: float):
         self._schedular_dir = schedular_dir
         self._current_epoch = current_epoch
         self._start_epoch = start_epoch
-        self._end_epoch = end_epoch
         self._step = step
+        self._pseudo_weight_gr = pseudo_weight_gr
         self._schedular_path = os.path.join(self._schedular_dir, "schedular.json")
 
         if os.path.exists(self._schedular_path):
@@ -44,7 +44,6 @@ class Schedular:
         # update using init args
         self._schedular_data["current_epoch"] = self._current_epoch
         self._schedular_data["start_epoch"] = self._start_epoch
-        self._schedular_data["end_epoch"] = self._end_epoch
         self._schedular_data["step"] = self._step
 
     def _read(self):
@@ -59,10 +58,13 @@ class Schedular:
     def _update(self):
         schedular_data = self._read()
         schedular_data["current_epoch"] = self._current_epoch
-        schedular_data["end_epoch"] = self._end_epoch
         schedular_data["step"] = self._step
         with open(self._schedular_path, "w") as f:
             json.dump(schedular_data, f, indent=2)
+
+    @property
+    def pseudo_weight(self):
+        return min(self._pseudo_weight_gr * self._current_epoch, 1)
 
     def step(self):
         self._current_epoch += 1
@@ -73,8 +75,6 @@ class Schedular:
         schedular_data = self._read()
         if self._current_epoch in schedular_data["schedular"]:
             active = True
-        elif self._end_epoch is not None and self._current_epoch > self._end_epoch:
-            active = False
         elif (self._current_epoch != 0 and self._current_epoch % self._step == 0) \
                 and self._current_epoch not in schedular_data["skip"]:
             active = True
@@ -102,7 +102,7 @@ def generate_pseudo(args, model, pseudo_root: str):
 
     img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
 
-    for path in tqdm(img_paths, desc="Generating unsupervised mask"):
+    for path in tqdm(img_paths, desc="Generating pseudo mask"):
         image = cv2.imread(path)
         if image is None:
             print(f"Could not load '{path}' as an image, skipping...")

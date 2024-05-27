@@ -87,10 +87,14 @@ def parse_train_args():
                         help="epoch to start generating unsupervised dataset")
     parser.add_argument("--unsupervised_step", type=int, default=None,
                         help="step to update unsupervised dataset")
-    parser.add_argument("--unsupervised_pred_iou_thresh", type=float, default=0.88,
+    parser.add_argument("--unsupervised_pred_iou_thresh", type=float,
+                        default=0.88,
                         help="Mask filtering threshold in [0,1]")
-    parser.add_argument("--unsupervised_stability_score_thresh", type=float, default=0.95,
+    parser.add_argument("--unsupervised_stability_score_thresh", type=float,
+                        default=0.95,
                         help="Mask filtering threshold in [0,1]")
+    parser.add_argument("--unsupervised_weight_gr", type=float,
+                        default=0.1)
 
     # parser.add_argument("--use_amp", type=bool, default=False, help="use amp")
 
@@ -392,7 +396,7 @@ class FocalLoss(nn.Module):
         self.gamma = gamma
         self.alpha = alpha
 
-    def forward(self, pred, mask):
+    def forward(self, pred, mask, weights=None):
         """
         pred: [B, 1, H, W]
         mask: [B, 1, H, W]
@@ -407,6 +411,10 @@ class FocalLoss(nn.Module):
         loss_pos = -self.alpha * mask * w_pos * torch.log(p + 1e-12)
         loss_neg = -(1 - self.alpha) * (1 - mask) * w_neg * torch.log(1 - p + 1e-12)
 
+        if weights is not None:
+            loss_pos *= weights.view(weights.shape[0], 1, 1, 1)
+            loss_neg *= weights.view(weights.shape[0], 1, 1, 1)
+
         loss = (torch.sum(loss_pos) + torch.sum(loss_neg)) / (num_pos + num_neg + 1e-12)
 
         return loss
@@ -417,16 +425,23 @@ class DiceLoss(nn.Module):
         super(DiceLoss, self).__init__()
         self.smooth = smooth
 
-    def forward(self, pred, mask):
+    def forward(self, pred, mask, weights=None):
         """
         pred: [B, 1, H, W]
         mask: [B, 1, H, W]
         """
         assert pred.shape == mask.shape, "pred and mask should have the same shape."
         p = torch.sigmoid(pred)
-        intersection = torch.sum(p * mask)
-        union = torch.sum(p) + torch.sum(mask)
-        dice_loss = (2.0 * intersection + self.smooth) / (union + self.smooth)
+
+        intersection = p * mask
+        union = p + mask
+
+        if weights is not None:
+            intersection *= weights.view(weights.shape[0], 1, 1, 1)
+            union *= weights.view(weights.shape[0], 1, 1, 1)
+
+        dice_loss = ((2.0 * intersection.sum() + self.smooth) /
+                     (union.sum() + self.smooth))
 
         return 1 - dice_loss
 
@@ -436,19 +451,25 @@ class MaskIoULoss(nn.Module):
     def __init__(self, ):
         super(MaskIoULoss, self).__init__()
 
-    def forward(self, pred_mask, ground_truth_mask, pred_iou):
+    def forward(self, pred_mask, ground_truth_mask, pred_iou, weights=None):
         """
         pred_mask: [B, 1, H, W]
         ground_truth_mask: [B, 1, H, W]
         pred_iou: [B, 1]
         """
-        assert pred_mask.shape == ground_truth_mask.shape, "pred_mask and ground_truth_mask should have the same shape."
+        assert pred_mask.shape == ground_truth_mask.shape, \
+            "pred_mask and ground_truth_mask should have the same shape."
 
         p = torch.sigmoid(pred_mask)
-        intersection = torch.sum(p * ground_truth_mask)
-        union = torch.sum(p) + torch.sum(ground_truth_mask) - intersection
+        intersection = torch.sum(p * ground_truth_mask, dim=(2, 3))
+        union = torch.sum(p + ground_truth_mask, dim=(2, 3)) - intersection
         iou = (intersection + 1e-7) / (union + 1e-7)
-        iou_loss = torch.mean((iou - pred_iou) ** 2)
+        if weights is None:
+            iou_loss = torch.mean((iou - pred_iou) ** 2)
+        else:
+            iou_loss = torch.mean(
+                (iou - pred_iou) ** 2 * weights.view(weights.shape[0], 1, 1, 1)
+            )
         return iou_loss
 
 
@@ -462,17 +483,17 @@ class FocalDiceloss_IoULoss(nn.Module):
         self.dice_loss = DiceLoss()
         self.maskiou_loss = MaskIoULoss()
 
-    def forward(self, pred, mask, pred_iou):
+    def forward(self, pred, mask, pred_iou, weights=None):
         """
         pred: [B, 1, H, W]
         mask: [B, 1, H, W]
         """
         assert pred.shape == mask.shape, "pred and mask should have the same shape."
 
-        focal_loss = self.focal_loss(pred, mask)
-        dice_loss =self.dice_loss(pred, mask)
+        focal_loss = self.focal_loss(pred, mask, weights)
+        dice_loss =self.dice_loss(pred, mask, weights)
         loss1 = self.weight * focal_loss + dice_loss
-        loss2 = self.maskiou_loss(pred, mask, pred_iou)
+        loss2 = self.maskiou_loss(pred, mask, pred_iou, weights)
         loss = loss1 + loss2 * self.iou_scale
         return loss
 

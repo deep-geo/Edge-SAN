@@ -16,9 +16,8 @@ from utils import FocalDiceloss_IoULoss, get_logger, generate_point, \
     setting_prompt_none, save_masks, parse_train_args
 from metrics import SegMetrics
 from tqdm import tqdm
-# from apex import amp
 from test import postprocess_masks
-from unsupervised import Schedular, generate_unsupervised
+from pseudo import PseudoSchedular, generate_pseudo
 
 torch.set_default_dtype(torch.float32)
 max_num_chkpt = 3
@@ -164,7 +163,8 @@ def eval_model(args, model, test_loader):
     return average_loss, test_iter_metrics
 
 
-def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
+def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
+                    pseudo_schedular):
     train_loader = tqdm(train_loader)
     train_losses = []
     train_iter_metrics = [0] * len(args.metrics)
@@ -187,24 +187,6 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
             else:
                 value.requires_grad = False
 
-        # if args.use_amp:
-        #     labels = batched_input["label"].half()
-        #     image_embeddings = model.image_encoder(batched_input["image"].half())
-        #
-        #     batch, _, _, _ = image_embeddings.shape
-        #     image_embeddings_repeat = []
-        #     for i in range(batch):
-        #         image_embed = image_embeddings[i]
-        #         image_embed = image_embed.repeat(args.mask_num, 1, 1, 1)
-        #         image_embeddings_repeat.append(image_embed)
-        #     image_embeddings = torch.cat(image_embeddings_repeat, dim=0)
-        #
-        #     masks, low_res_masks, iou_predictions = prompt_and_decoder(args, batched_input, model, image_embeddings, decoder_iter = False)
-        #     loss = criterion(masks, labels, iou_predictions)
-        #     with amp.scale_loss(loss, optimizer) as scaled_loss:
-        #         scaled_loss.backward(retain_graph=False)
-        #
-        # else:
         labels = batched_input["label"]
         image_embeddings = model.image_encoder(batched_input["image"])
 
@@ -214,14 +196,18 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
             image_embed = image_embeddings[i]
             image_embed = image_embed.repeat(args.mask_num, 1, 1, 1)
             image_embeddings_repeat.append(image_embed)
+
         image_embeddings = torch.cat(image_embeddings_repeat, dim=0)
 
-        masks, low_res_masks, iou_predictions = prompt_and_decoder(args,
-                                                                   batched_input,
-                                                                   model,
-                                                                   image_embeddings,
-                                                                   decoder_iter=False)
-        loss = criterion(masks, labels, iou_predictions)
+        masks, low_res_masks, iou_predictions = prompt_and_decoder(
+            args, batched_input, model, image_embeddings, decoder_iter=False)
+
+        pseudos = (batched_input["pseudo"].unsqueeze(1).
+                   repeat(1, args.mask_num).reshape(-1))
+        pseudo_weights = torch.ones(size=pseudos.shape)
+        pseudo_weights[pseudos] = pseudo_schedular.pseudo_weight
+
+        loss = criterion(masks, labels, iou_predictions, pseudo_weights)
         loss.backward(retain_graph=False)
 
         optimizer.step()
@@ -229,7 +215,9 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
 
         if int(batch + 1) % 50 == 0:
             print(
-                f'Epoch: {epoch + 1}, Batch: {batch + 1}, first {flag} prompt: {SegMetrics(masks, labels, args.metrics)}')
+                f'Epoch: {epoch + 1}, Batch: {batch + 1}, '
+                f'first {flag} prompt: {SegMetrics(masks, labels, args.metrics)}'
+            )
 
         point_num = random.choice(args.point_list)
         batched_input = generate_point(masks, labels, low_res_masks,
@@ -248,18 +236,10 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
             if iter == init_mask_num or iter == args.iter_point - 1:
                 batched_input = setting_prompt_none(batched_input)
 
-            # if args.use_amp:
-            #     masks, low_res_masks, iou_predictions = prompt_and_decoder(args, batched_input, model, image_embeddings, decoder_iter=True)
-            #     loss = criterion(masks, labels, iou_predictions)
-            #     with amp.scale_loss(loss,  optimizer) as scaled_loss:
-            #         scaled_loss.backward(retain_graph=True)
-            # else:
-            masks, low_res_masks, iou_predictions = prompt_and_decoder(args,
-                                                                       batched_input,
-                                                                       model,
-                                                                       image_embeddings,
-                                                                       decoder_iter=True)
-            loss = criterion(masks, labels, iou_predictions)
+            masks, low_res_masks, iou_predictions = prompt_and_decoder(
+                args, batched_input, model, image_embeddings, decoder_iter=True)
+
+            loss = criterion(masks, labels, iou_predictions, pseudo_weights)
             loss.backward(retain_graph=True)
 
             optimizer.step()
@@ -274,10 +254,12 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
             if int(batch + 1) % 50 == 0:
                 if iter == init_mask_num or iter == args.iter_point - 1:
                     print(
-                        f'Epoch: {epoch + 1}, Batch: {batch + 1}, mask prompt: {SegMetrics(masks, labels, args.metrics)}')
+                        f'Epoch: {epoch + 1}, Batch: {batch + 1}, '
+                        f'mask prompt: {SegMetrics(masks, labels, args.metrics)}')
                 else:
                     print(
-                        f'Epoch: {epoch + 1}, Batch: {batch + 1}, point {point_num} prompt: {SegMetrics(masks, labels, args.metrics)}')
+                        f'Epoch: {epoch + 1}, Batch: {batch + 1}, '
+                        f'point {point_num} prompt: {SegMetrics(masks, labels, args.metrics)}')
 
         if int(batch + 1) % 200 == 0:
             print(
@@ -289,13 +271,11 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
 
         train_losses.append(loss.item())
 
-        gpu_info = {}
-        gpu_info['gpu_name'] = args.device
-        train_loader.set_postfix(train_loss=loss.item(), gpu_info=gpu_info)
+        train_loader.set_postfix(train_loss=loss.item())
 
         train_batch_metrics = SegMetrics(masks, labels, args.metrics)
-        train_iter_metrics = [train_iter_metrics[i] + train_batch_metrics[i] for
-                              i in range(len(args.metrics))]
+        train_iter_metrics = [train_iter_metrics[i] + train_batch_metrics[i]
+                              for i in range(len(args.metrics))]
 
     return train_losses, train_iter_metrics
 
@@ -349,44 +329,46 @@ def main(args):
     config["resume_checkpoint"] = resume_chkpt
     wandb.init(project="SAM_Nuclei", name=args.run_name, config=config)
 
-    # todo random seed
+    # todo: random seed not work
     if args.seed is not None:
         random.seed(args.seed)
 
-    # unsupervised learning
-    dst_unsupervised_root = None
-    unsupervised_schedular = None
+    train_dataset = train_dataset_gt = TrainingDataset(
+        split_paths=args.split_paths,
+        point_num=1,
+        mask_num=args.mask_num,
+        requires_name=False,
+        is_pseudo=False
+    )
+
+    # pseudo dataset
+    pseudo_schedular = None
     if args.activate_unsupervised:
-        dst_unsupervised_root = os.path.join(run_dir, "unsupervised")
-        dst_unsupervised_data_dir = os.path.join(dst_unsupervised_root, "data")
-        os.makedirs(dst_unsupervised_data_dir, exist_ok=True)
+        pseudo_root = os.path.join(run_dir, "pseudo")
+        pseudo_data_dir = os.path.join(pseudo_root, "data")
+        os.makedirs(pseudo_data_dir, exist_ok=True)
 
-        generate_unsupervised(args, model, dst_unsupervised_root)
+        generate_pseudo(args, model, pseudo_root)
 
-        unsupervised_schedular = Schedular(
+        pseudo_schedular = PseudoSchedular(
             schedular_dir=run_dir,
             current_epoch=0,
             step=args.unsupervised_step if args.unsupervised_step else 1,
             start_epoch=args.unsupervised_start_epoch,
-            end_epoch=None
+            pseudo_weight_gr=args.unsupervised_weight_gr
         )
 
-    if args.activate_unsupervised and resume_epoch >= args.unsupervised_start_epoch:
-        unsupervised_root = os.path.join(run_dir, "unsupervised")
-        unsupervised_split_path = os.path.join(unsupervised_root, "split.json")
-        split_paths = [unsupervised_split_path] if args.unsupervised_only else \
-            args.split_paths + [unsupervised_split_path]
-        train_dataset = TrainingDataset(
-            split_paths=split_paths,
-            point_num=1,  # todo 1?
-            mask_num=args.mask_num,
-            requires_name=False
-        )
-    else:
-        train_dataset = TrainingDataset(split_paths=args.split_paths,
-                                        point_num=1,  # todo 1?
-                                        mask_num=args.mask_num,
-                                        requires_name=False)
+        if resume_epoch >= args.unsupervised_start_epoch:
+            pseudo_split_path = os.path.join(pseudo_root, "split.json")
+            train_dataset_pseudo = TrainingDataset(
+                split_paths=pseudo_split_path,
+                point_num=1,
+                mask_num=args.mask_num,
+                requires_name=False,
+                is_pseudo=True
+            )
+            train_dataset = train_dataset_gt + train_dataset_pseudo
+
     test_dataset = TestingDataset(split_paths=args.split_paths,
                                   requires_name=True,
                                   point_num=args.point_num,
@@ -397,8 +379,12 @@ def main(args):
     test_loader = DataLoader(dataset=test_dataset, batch_size=args.batch_size,
                              shuffle=False, num_workers=args.num_workers)
 
-    loggers = get_logger(os.path.join(args.work_dir, "logs",
-                                      f"{args.run_name}_{datetime.datetime.now().strftime('%Y%m%d-%H%M.log')}"))
+    loggers = get_logger(
+        os.path.join(
+            args.work_dir, "logs",
+            f"{args.run_name}_{datetime.datetime.now().strftime('%Y%m%d-%H%M.log')}"
+        )
+    )
 
     best_loss = 1e10
     l = len(train_loader)
@@ -406,10 +392,14 @@ def main(args):
     for epoch in range(resume_epoch, args.epochs):
         print(f"\nTrain epoch {epoch}...")
 
+        if pseudo_schedular is not None:
+            pseudo_schedular.step()
+
         model.train()
 
         train_losses, train_iter_metrics = train_one_epoch(
-            args, model, optimizer, train_loader, epoch, criterion
+            args, model, optimizer, train_loader, epoch, criterion,
+            pseudo_schedular
         )
 
         if args.lr_scheduler is not None:
@@ -420,8 +410,7 @@ def main(args):
         average_loss = np.mean(train_losses)
 
         print("\nEvaluate model...")
-        average_test_loss, test_iter_metrics = eval_model(args, model,
-                                                          test_loader)
+        average_test_loss, test_iter_metrics = eval_model(args, model, test_loader)
 
         wandb.log({"Loss/train": average_loss, "Loss/test": average_test_loss})
 
@@ -431,7 +420,8 @@ def main(args):
         lr = scheduler.get_last_lr()[
             0] if args.lr_scheduler is not None else args.lr
         loggers.info(
-            f"epoch: {epoch + 1}, lr: {lr}, train-loss: {average_loss:.4f}, test-loss: {average_test_loss:.4f}, metrics: {metrics_dict}")
+            f"epoch: {epoch + 1}, lr: {lr}, train-loss: {average_loss:.4f}, "
+            f"test-loss: {average_test_loss:.4f}, metrics: {metrics_dict}")
 
         if average_test_loss < best_loss:
             # clean redundant checkpoints
@@ -455,27 +445,26 @@ def main(args):
                      'epoch': epoch + 1}
             torch.save(state, save_path)
 
-        if args.activate_unsupervised:
-            unsupervised_schedular.step()
-            if unsupervised_schedular.is_active():
-                unsupervised_root = os.path.join(run_dir, "unsupervised")
-                generate_unsupervised(args, model, unsupervised_root)
-                unsupervised_split_path = os.path.join(unsupervised_root, "split.json")
-                split_paths = [unsupervised_split_path] if args.unsupervised_only else \
-                    args.split_paths + [unsupervised_split_path]
-                train_dataset = TrainingDataset(
-                    split_paths=split_paths,
-                    point_num=1,  # todo 1?
-                    mask_num=args.mask_num,
-                    requires_name=False
-                )
-                train_loader = DataLoader(train_dataset,
-                                          batch_size=args.batch_size,
-                                          shuffle=True,
-                                          num_workers=args.num_workers)
+        if args.activate_unsupervised and pseudo_schedular.is_active():
+            pseudo_root = os.path.join(run_dir, "pseudo")
+            generate_pseudo(args, model, pseudo_root)
+            pseudo_split_path = os.path.join(pseudo_root, "split.json")
+            train_dataset_pseudo = TrainingDataset(
+                split_paths=pseudo_split_path,
+                point_num=1,
+                mask_num=args.mask_num,
+                requires_name=False,
+                is_pseudo=True
+            )
+            train_dataset = train_dataset_gt + train_dataset_pseudo
+            train_loader = DataLoader(train_dataset,
+                                      batch_size=args.batch_size,
+                                      shuffle=True,
+                                      num_workers=args.num_workers)
 
 
 if __name__ == '__main__':
     args = parse_train_args()
     args.encoder_adapter = True
+    # args.activate_unsupervised = True
     main(args)

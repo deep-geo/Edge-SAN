@@ -1,3 +1,4 @@
+import copy
 import os
 import json
 import random
@@ -9,8 +10,7 @@ import albumentations as A
 
 from albumentations.pytorch import ToTensorV2
 from tqdm import tqdm
-from utils import get_boxes_from_mask, init_point_sampling, train_transforms, \
-    get_transform
+from utils import get_boxes_from_mask, init_point_sampling, train_transforms
 from torch.utils.data import Dataset
 
 
@@ -20,10 +20,14 @@ class TestingDataset(Dataset):
         """
         Initializes a TestingDataset object.
         Args:
-            requires_name (bool, optional): Indicates whether the dataset requires image names. Defaults to True.
-            point_num (int, optional): The number of points to retrieve. Defaults to 1.
-            return_ori_mask (bool, optional): Indicates whether to return the original mask. Defaults to True.
-            prompt_path (str, optional): The path to the prompt file. Defaults to None.
+            requires_name (bool, optional): Indicates whether the dataset
+                requires image names. Defaults to True.
+            point_num (int, optional): The number of points to retrieve.
+                Defaults to 1.
+            return_ori_mask (bool, optional): Indicates whether to return
+                the original mask. Defaults to True.
+            prompt_path (str, optional): The path to the prompt file.
+                Defaults to None.
         """
         self.return_ori_mask = return_ori_mask
         self.prompt_path = prompt_path
@@ -58,7 +62,8 @@ class TestingDataset(Dataset):
         Args:
             index (int): The index of the item to retrieve.
         Returns:
-            dict: A dictionary containing the preprocessed image and associated information.
+            dict: A dictionary containing the preprocessed image and
+                associated information.
         """
         image_input = {}
         try:
@@ -72,7 +77,8 @@ class TestingDataset(Dataset):
         ori_np_mask[ori_np_mask != mask_val] = 0
         ori_np_mask[ori_np_mask == mask_val] = 1
 
-        assert np.array_equal(ori_np_mask, ori_np_mask.astype(bool)), f"Mask should only contain binary values 0 and 1. {self.label_paths[index]}"
+        assert np.array_equal(ori_np_mask, ori_np_mask.astype(bool)), \
+            f"Mask should only contain binary values 0 and 1. {self.label_paths[index]}"
 
         h, w = ori_np_mask.shape
         ori_mask = torch.tensor(ori_np_mask).unsqueeze(0) # ori_mask = torch.tensor(cv2.resize(ori_np_mask, (self.image_size, self.image_size))).unsqueeze(0)
@@ -86,9 +92,12 @@ class TestingDataset(Dataset):
             point_coords, point_labels = init_point_sampling(mask, self.point_num)
         else:
             prompt_key = mask_path.split('/')[-1]
-            boxes = torch.as_tensor(self.prompt_list[prompt_key]["boxes"], dtype=torch.float)
-            point_coords = torch.as_tensor(self.prompt_list[prompt_key]["point_coords"], dtype=torch.float)
-            point_labels = torch.as_tensor(self.prompt_list[prompt_key]["point_labels"], dtype=torch.int)
+            boxes = torch.as_tensor(
+                self.prompt_list[prompt_key]["boxes"], dtype=torch.float)
+            point_coords = torch.as_tensor(
+                self.prompt_list[prompt_key]["point_coords"], dtype=torch.float)
+            point_labels = torch.as_tensor(
+                self.prompt_list[prompt_key]["point_labels"], dtype=torch.int)
 
         image_input["image"] = image
         image_input["label"] = mask.unsqueeze(0)
@@ -114,11 +123,13 @@ class TestingDataset(Dataset):
 
 class TrainingDataset(Dataset):
 
-    def __init__(self, split_paths, requires_name=True, point_num=1, mask_num=5):
+    def __init__(self, split_paths, requires_name=True, point_num=1, mask_num=5,
+                 is_pseudo: bool = False):
         """
         Initializes a training dataset.
         Args:
-            requires_name (bool, optional): Indicates whether to include image names in the output. Defaults to True.
+            requires_name (bool, optional): Indicates whether to include
+             image names in the output. Defaults to True.
             num_points (int, optional): Number of points to sample. Defaults to 1.
             num_masks (int, optional): Number of masks to sample. Defaults to 5.
         """
@@ -130,6 +141,9 @@ class TrainingDataset(Dataset):
 
         self.image_paths = []
         self.label_paths = []
+        self.pseudos = []
+
+        split_paths = [split_paths] if isinstance(split_paths, str) else split_paths
 
         for i, split_path in enumerate(split_paths):
             with open(split_path, "r") as f:
@@ -142,6 +156,14 @@ class TrainingDataset(Dataset):
                 label_path = os.path.join(data_root, label_path)
                 self.image_paths.append(data_path)
                 self.label_paths.append(label_path)
+                self.pseudos.append(is_pseudo)
+
+    def __add__(self, other):
+        instance = copy.deepcopy(self)
+        instance.image_paths = self.image_paths + other.image_paths
+        instance.label_paths = self.image_paths + other.label_paths
+        instance.pseudo = self.pseudos + other.pseudos
+        return self
     
     def __getitem__(self, index):
         """
@@ -185,8 +207,8 @@ class TrainingDataset(Dataset):
                 pre_mask[pre_mask == mask_val] = 1.0
 
                 augments = transforms(image=image, mask=pre_mask)
-                image_tensor, mask_tensor = augments['image'], augments['mask'].to(
-                    torch.int64)
+                image_tensor, mask_tensor = (augments['image'],
+                                             augments['mask'].to(torch.int64))
 
                 boxes = get_boxes_from_mask(mask_tensor)
                 point_coords, point_label = init_point_sampling(mask_tensor,
@@ -207,6 +229,7 @@ class TrainingDataset(Dataset):
             image_input["boxes"] = boxes
             image_input["point_coords"] = point_coords
             image_input["point_labels"] = point_labels
+            image_input["pseudo"] = self.pseudos[index]
 
             image_name = self.image_paths[index].split('/')[-1]
             if self.requires_name:
