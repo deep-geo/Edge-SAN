@@ -479,5 +479,5 @@ def main(args):
 if __name__ == '__main__':
     args = parse_train_args()
     args.encoder_adapter = True
-    args.activate_unsupervised = True
+    # args.activate_unsupervised = True
     main(args)

@@ -93,6 +93,7 @@ def generate_pseudo(args, model, pseudo_root: str):
         stability_score_offset=1.0,
         box_nms_thresh=0.7,
         min_mask_region_area=10,
+        points_per_side=28,
         points_per_batch=256
     )
     pseudo_data_dir = os.path.join(pseudo_root, "data")
