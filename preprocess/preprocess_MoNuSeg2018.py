@@ -19,6 +19,7 @@ import glob
 import argparse
 import cv2
 import tqdm
+import random
 import numpy as np
 import xml.etree.ElementTree as ET
 
@@ -63,7 +64,14 @@ def parse_aperio_xml(xml_file):
 
 def draw_annotations_on_image(annotations, image_size):
     image = np.zeros((image_size[0], image_size[1]), dtype=np.uint16)
-    for i, region in enumerate(annotations[0]["regions"]):
+
+    regions = []
+    for annotation in annotations:
+        for region in annotation["regions"]:
+            regions.append(region)
+
+    random.shuffle(regions)
+    for i, region in enumerate(regions):
         points = np.array(region['vertices'], np.int32)
         points = points.reshape((-1, 1, 2))
         cv2.polylines(image, [points], isClosed=True, color=i + 1, thickness=2)
