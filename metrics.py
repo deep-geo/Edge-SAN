@@ -2,6 +2,16 @@ import torch
 import numpy as np
 from scipy.spatial.distance import directed_hausdorff
 
+import os
+import numpy as np
+from PIL import Image
+from torchvision import transforms
+from scipy.optimize import linear_sum_assignment
+
+# Device configuration
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 
 def _threshold(x, threshold=None):
     if threshold is not None:
@@ -79,42 +89,89 @@ def specificity(pr, gt, eps=1e-7, threshold=0.5):
     fp = torch.sum(pr_) - torch.sum(gt_ * pr_)
     return ((tn + eps) / (tn + fp + eps)).cpu().numpy()
 
-# def hausdorff_distance(pr, gt, threshold=0.5):
-#     pr_, gt_ = _list_tensor(pr, gt)
-#     pr_ = _threshold(pr_, threshold=threshold).cpu().numpy()
-#     gt_ = _threshold(gt_, threshold=threshold).cpu().numpy()
 
-#     # Calculate Hausdorff distance for each item in the batch
-#     distances = [directed_hausdorff(u, v)[0] for u, v in zip(pr_, gt_)]
-#     return (torch.mean(distances)).cpu().numpy()
+# Helper function to convert images to tensors
+def to_tensor(img):
+    return torch.tensor(np.array(img), device=device)
 
-
-def hausdorff_distance(pr, gt, threshold=0.5):
-    # Assuming _list_tensor and _threshold properly prepare and convert tensors
-    pr_, gt_ = _list_tensor(pr, gt)
-    pr_ = _threshold(pr_, threshold=threshold).cpu().numpy()
-    gt_ = _threshold(gt_, threshold=threshold).cpu().numpy()
-
-    distances = []
-    for u, v in zip(pr_, gt_):
-        # Convert each binary image to a set of points
-        points_u = np.argwhere(u)
-        points_v = np.argwhere(v)
-
-        # Check if any of the sets are empty
-        if points_u.size == 0 or points_v.size == 0:
-            # Can decide on a suitable default distance when one set is empty
-            distances.append(float('inf'))  # Consider infinite distance if no points
+# Helper function to get instances from a mask
+def get_instances(mask):
+    instances = []
+    unique_labels = torch.unique(mask)
+    for label in unique_labels:
+        if label == 0:
             continue
+        instance = (mask == label)
+        instances.append(instance)
+    return instances
 
-        # Calculate directed Hausdorff distances and take the maximum
-        dist_uv = directed_hausdorff(points_u, points_v)[0]
-        dist_vu = directed_hausdorff(points_v, points_u)[0]
-        distances.append(max(dist_uv, dist_vu))
+# Average Jaccard Index (AJI)
+def aji(pred, gt, epsilon=1e-10):
+    pred_instances = get_instances(pred)
+    gt_instances = get_instances(gt)
 
-    # Convert list to a tensor to use torch.mean
-    distances_tensor = torch.tensor(distances, dtype=torch.float32)
-    return torch.mean(distances_tensor).item()  # Returns a single scalar value
+    intersection_sum = 0
+    union_sum = 0
+
+    for gt_instance in gt_instances:
+        max_iou = 0
+        for pred_instance in pred_instances:
+            intersection = torch.sum((gt_instance & pred_instance) > 0)
+            union = torch.sum((gt_instance | pred_instance) > 0)
+            iou = (intersection + epsilon) / (union + epsilon)
+            max_iou = max(max_iou, iou)
+        intersection_sum += max_iou
+        union_sum += 1
+
+    aji_score = (intersection_sum + epsilon) / (union_sum + epsilon)
+    return aji_score
+
+# Detection Quality (DQ)
+def dq(pred, gt, epsilon=1e-10):
+    pred_instances = get_instances(pred)
+    gt_instances = get_instances(gt)
+
+    intersection = torch.zeros((len(gt_instances), len(pred_instances)), device=device)
+    union = torch.zeros((len(gt_instances), len(pred_instances)), device=device)
+
+    for i, gt_instance in enumerate(gt_instances):
+        for j, pred_instance in enumerate(pred_instances):
+            intersection[i, j] = torch.sum((gt_instance & pred_instance) > 0)
+            union[i, j] = torch.sum((gt_instance | pred_instance) > 0)
+
+    iou = (intersection + epsilon) / (union + epsilon)
+    cost_matrix = 1 - iou.cpu().numpy()
+    gt_ind, pred_ind = linear_sum_assignment(cost_matrix)
+
+    dq_score = len(gt_ind) / (len(gt_instances) + len(pred_instances) - len(gt_ind))
+    return dq_score
+
+# Segmentation Quality (SQ)
+def sq(pred, gt, epsilon=1e-10):
+    pred_instances = get_instances(pred)
+    gt_instances = get_instances(gt)
+
+    intersection = torch.zeros((len(gt_instances), len(pred_instances)), device=device)
+    union = torch.zeros((len(gt_instances), len(pred_instances)), device=device)
+
+    for i, gt_instance in enumerate(gt_instances):
+        for j, pred_instance in enumerate(pred_instances):
+            intersection[i, j] = torch.sum((gt_instance & pred_instance) > 0)
+            union[i, j] = torch.sum((gt_instance | pred_instance) > 0)
+
+    iou = (intersection + epsilon) / (union + epsilon)
+    cost_matrix = 1 - iou.cpu().numpy()
+    gt_ind, pred_ind = linear_sum_assignment(cost_matrix)
+
+    sq_score = iou[gt_ind, pred_ind].mean().item()
+    return sq_score
+
+# Panoptic Quality (PQ)
+def pq(pred, gt, epsilon=1e-10):
+    dq_score = dq(pred, gt, epsilon)
+    sq_score = sq(pred, gt, epsilon)
+    pq_score = dq_score * sq_score
+    return pq_score
 
 
 def process_metrics(metric_list):
@@ -157,8 +214,14 @@ def SegMetrics(pred, label, metrics):
             metric_list.append(torch.mean(f1_score(pred, label)))
         elif metric == 'specificity':
             metric_list.append(np.mean(specificity(pred, label)))
-        elif metric == 'hausdorff_distance':
-            metric_list.append(np.mean(hausdorff_distance(pred, label)))
+        elif metric == 'aji':
+            metric_list.append(np.mean(aji(pred, label)))
+        elif metric == 'dq':
+            metric_list.append(np.mean(dq(pred, label)))
+        elif metric == 'sq':
+            metric_list.append(np.mean(sq(pred, label)))
+        elif metric == 'pq':
+            metric_list.append(np.mean(pq(pred, label)))
         else:
             raise ValueError('metric %s not recognized' % metric)
     if pred is not None:
