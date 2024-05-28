@@ -144,8 +144,8 @@ def eval_model(args, model, test_loader):
                                        original_size)
 
         miss_rate.append(
-            (torch.sum(low_res_masks, dim=(2, 3)) == 0).sum() /
-            low_res_masks.shape[0]
+            ((torch.sum(low_res_masks, dim=(2, 3)) == 0).sum() /
+            low_res_masks.shape[0]).item()
         )
 
         if args.save_pred:
@@ -213,7 +213,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         if args.activate_unsupervised:
             pseudos = (batched_input["pseudo"].unsqueeze(1).
                        repeat(1, args.mask_num).reshape(-1))
-            pseudo_weights = torch.ones(size=pseudos.shape)
+            pseudo_weights = torch.ones(size=pseudos.shape, device=args.device)
             pseudo_weights[pseudos] = pseudo_schedular.pseudo_weight
 
         loss = criterion(masks, labels, iou_predictions, pseudo_weights)
