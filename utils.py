@@ -542,6 +542,9 @@ class BCE_Diceloss_IoULoss(nn.Module):
 
 
 def calc_step(num_colors: int):
+    """
+    To calculate the appropriate step value to ensure better visual effects.
+    """
     return max(1, min(STEP, int((255 - 25) / num_colors)))
 
 

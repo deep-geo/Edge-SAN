@@ -58,8 +58,7 @@ class PreprocessThyroid(Preprocess):
             print(f"\nProcess original {split} data...")
             for path in tqdm.tqdm(src_data_paths):
                 img = cv2.imread(path)
-                self.save_data(ori_data=img,
-                               data_name=os.path.basename(path)[:-4])
+                self.save_data(data=img, data_name=os.path.basename(path)[:-4])
 
             # label
             src_label_dir = os.path.join(self.src_root, split, "label")    # bound, not label
@@ -95,7 +94,7 @@ class PreprocessThyroid(Preprocess):
                         label_uint16, tmp_contours, -1, color=i + 1, thickness=-1
                     )
 
-                self.save_label(ori_label=label_uint16, label_name=basename[:-4])
+                self.save_label(label=label_uint16, label_name=basename[:-4])
 
 
 if __name__ == "__main__":

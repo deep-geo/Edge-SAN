@@ -59,7 +59,7 @@ class PreprocessTNBC(Preprocess):
         print("\nProcess data...")
         for path in tqdm.tqdm(src_data_paths):
             img = cv2.imread(path)
-            self.save_data(ori_data=img, data_name=os.path.basename(path)[:-4])
+            self.save_data(data=img, data_name=os.path.basename(path)[:-4])
 
         # label
         src_label_dir = os.path.join(self.src_root, "Labels")
@@ -67,8 +67,7 @@ class PreprocessTNBC(Preprocess):
         print("\nProcess label...")
         for path in tqdm.tqdm(label_paths):
             label = loadmat(path)["inst_map"]
-            self.save_label(ori_label=label,
-                            label_name=os.path.basename(path)[:-4])
+            self.save_label(label=label, label_name=os.path.basename(path)[:-4])
 
 
 if __name__ == "__main__":

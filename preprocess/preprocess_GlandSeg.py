@@ -39,14 +39,14 @@ class PreprocessGlandSeg(Preprocess):
         for i, src_data_path in tqdm.tqdm(enumerate(src_data_paths),
                                           total=len(src_data_paths)):
             img = cv2.imread(src_data_path)
-            self.save_data(ori_data=img, data_name=f"image_{i + 1:04d}")
+            self.save_data(data=img, data_name=f"image_{i + 1:04d}")
 
         # label
         print("\nProcess label...")
         for i, path in tqdm.tqdm(enumerate(src_label_paths),
                                  total=len(src_label_paths)):
             label = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-            self.save_label(ori_label=label, label_name=f"image_{i + 1:04d}")
+            self.save_label(label=label, label_name=f"image_{i + 1:04d}")
 
 
 if __name__ == "__main__":

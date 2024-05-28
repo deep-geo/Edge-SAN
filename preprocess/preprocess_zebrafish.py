@@ -97,10 +97,9 @@ class PreprocessZebrafish(Preprocess):
                             img = images[:, :, i]
                             label = labels[:, :, i]
 
-                        self.save_data(ori_data=img,
-                                       data_name=f"Mouse_{basename}")
-                        self.save_label(ori_label=label,
-                                        label_name=f"Mouse_{basename}")
+                        filename = f"Mouse_{basename}"
+                        self.save_data(data=img, data_name=filename)
+                        self.save_label(label=label, label_name=filename)
 
         print("\nProcess Zebrafish(NucMM-Z)...")
         src_data_dir = os.path.join(self.src_root, "Zebrafish(NucMM-Z)", "Image")
@@ -132,10 +131,9 @@ class PreprocessZebrafish(Preprocess):
                             img = images[:, :, i]
                             label = labels[:, :, i]
 
-                        self.save_data(ori_data=img,
-                                       data_name=f"Zebrafish_{basename}")
-                        self.save_label(ori_label=label,
-                                        label_name=f"Zebrafish_{basename}")
+                        filename = f"Zebrafish_{basename}"
+                        self.save_data(data=img, data_name=filename)
+                        self.save_label(label=label, label_name=filename)
 
 
 if __name__ == "__main__":

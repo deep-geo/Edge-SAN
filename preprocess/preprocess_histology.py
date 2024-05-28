@@ -33,7 +33,7 @@ class PreprocessHistology(Preprocess):
         print("\nProcess data...")
         for path in tqdm.tqdm(src_data_paths):
             img = cv2.imread(path)
-            self.save_data(ori_data=img, data_name=os.path.basename(path)[:-4])
+            self.save_data(data=img, data_name=os.path.basename(path)[:-4])
 
         # label
         src_label_dir = os.path.join(self.src_root, "label")    # bound, not label
@@ -58,13 +58,12 @@ class PreprocessHistology(Preprocess):
                 dilation_kernel = np.ones((3, 3), np.uint8)
                 tmp_label = cv2.dilate(tmp_label, dilation_kernel, iterations=2)
 
-                tmp_contours, _ = cv2.findContours(tmp_label,
-                                                   cv2.RETR_EXTERNAL,
-                                                   cv2.CHAIN_APPROX_SIMPLE)
-                label_uint16 = cv2.drawContours(label_uint16, tmp_contours, -1,
-                                                color=i + 1, thickness=-1)
+                tmp_contours, _ = cv2.findContours(
+                    tmp_label, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                label_uint16 = cv2.drawContours(
+                    label_uint16, tmp_contours, -1, color=i + 1, thickness=-1)
 
-            self.save_label(ori_label=label_uint16,
+            self.save_label(label=label_uint16,
                             label_name=os.path.basename(path)[:-4])
 
 

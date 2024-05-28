@@ -47,6 +47,7 @@ import tqdm
 import random
 
 from preprocess import Preprocess
+from utils import calc_step
 
 
 class PreprocessLizard(Preprocess):
@@ -87,12 +88,10 @@ class PreprocessLizard(Preprocess):
 
                 val_groups = [vals[i:i + 255] for i in range(0, len(vals), 255)]
                 for i, group in enumerate(val_groups):
-                    step = self.calc_step(len(group))
+                    step = calc_step(len(group))
                     dst_label = np.zeros(shape=label.shape, dtype=np.uint8)
                     for j, val in enumerate(group):
                         dst_label[markers == val] = 255 - j * step
-
-                    dst_label = self.transform(dst_label)
 
                     if i == 0:
                         label_name = self.dst_prefix + basename

@@ -28,14 +28,14 @@ class PreprocessCoNIC(Preprocess):
         images = np.load(images_path)
         print("\nProcess data...")
         for i in tqdm.tqdm(range(images.shape[0]), total=images.shape[0]):
-            self.save_data(ori_data=images[i], data_name=f"image_{i + 1:04d}")
+            self.save_data(data=images[i], data_name=f"image_{i + 1:04d}")
 
         # label
         labels = np.load(labels_path)
         print("\nProcess label...")
         for i in tqdm.tqdm(range(labels.shape[0]), total=labels.shape[0]):
             label = labels[i, :, :, 0]  # 0 - instance, 1 - semantic
-            self.save_label(ori_label=label, label_name=f"image_{i + 1:04d}")
+            self.save_label(label=label, label_name=f"image_{i + 1:04d}")
 
 
 if __name__ == "__main__":

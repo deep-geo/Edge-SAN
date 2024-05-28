@@ -96,14 +96,13 @@ class PreprocessMoNuSeg2020(Preprocess):
         print("\nProcess data...")
         for path in tqdm.tqdm(src_data_paths):
             img = cv2.imread(path)
-            self.save_data(ori_data=img, data_name=os.path.basename(path)[:-4])
+            self.save_data(data=img, data_name=os.path.basename(path)[:-4])
 
             label_path = path[:-4] + ".xml"
             annotations = parse_aperio_xml(label_path)
             label = draw_annotations_on_image(annotations, img.shape)
 
-            self.save_label(ori_label=label,
-                            label_name=os.path.basename(path)[:-4])
+            self.save_label(label=label, label_name=os.path.basename(path)[:-4])
 
 
 if __name__ == "__main__":

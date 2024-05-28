@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 from abc import abstractmethod
-from utils import calc_step, get_transform
+from utils import calc_step
 
 
 class Preprocess:
@@ -24,46 +24,40 @@ class Preprocess:
         self.dst_size = int(dst_size)
 
         self.dst_prefix = "" if dst_prefix is None else dst_prefix.strip()
-        self.dst_prefix = self.dst_prefix + "_" if self.dst_prefix else self.dst_prefix
+        self.dst_prefix = self.dst_prefix + "_" if self.dst_prefix \
+            else self.dst_prefix
 
-    def _get_transform(self, ori_h: int, ori_w: int):
-        return get_transform(self.dst_size, ori_h, ori_w)
-
-    def transform(self, img: np.ndarray):
-        # img shape: h * w * c
-        t = self._get_transform(img.shape[0], img.shape[1])
-        return t(image=img)["image"]
-
-    def calc_step(self, num_colors: int):
-        return calc_step(num_colors)
-
-    def save_data(self, ori_data: np.ndarray, data_name: str):
-        dst_img = self.transform(ori_data)
+    def save_data(self, data: np.ndarray, data_name: str):
+        if len(data.shape) == 2:
+            data = cv2.cvtColor(data, cv2.COLOR_GRAY2BGR)
         dst_img_path = os.path.join(
             self.dst_data_dir,
             self.dst_prefix + data_name + ".png"
         )
-        cv2.imwrite(dst_img_path, dst_img)
+        cv2.imwrite(dst_img_path, data)
 
-    def save_label(self, ori_label: np.ndarray, label_name: str):
-        label = ori_label.astype(np.uint16)
-        dst_label_uint16 = self.transform(label)
+    def save_label(self, label: np.ndarray, label_name: str):
+        label_uint16 = label.astype(np.uint16)
 
         # npy
-        dst_arr_path = os.path.join(self.dst_label_dir,
-                                    self.dst_prefix + label_name + ".npy")
-        np.save(dst_arr_path, dst_label_uint16)
+        dst_arr_path = os.path.join(
+            self.dst_label_dir,
+            self.dst_prefix + label_name + ".npy"
+        )
+        np.save(dst_arr_path, label_uint16)
 
         # png
-        vals_uint16 = [_ for _ in np.unique(dst_label_uint16) if _ != 0][:255]
-        dst_label_uint8 = np.zeros(shape=dst_label_uint16.shape, dtype=np.uint8)
+        vals_uint16 = [_ for _ in np.unique(label_uint16) if _ != 0][:255]
+        random.shuffle(vals_uint16)
+        dst_label_uint8 = np.zeros(shape=label_uint16.shape, dtype=np.uint8)
         if len(vals_uint16) > 0:
-            random.shuffle(vals_uint16)
-            step = self.calc_step(len(vals_uint16))
+            step = calc_step(len(vals_uint16))
             for j, val in enumerate(vals_uint16):
-                dst_label_uint8[dst_label_uint16 == val] = 255 - j * step
-        dst_img_path = os.path.join(self.dst_label_dir,
-                                    self.dst_prefix + label_name + ".png")
+                dst_label_uint8[label_uint16 == val] = 255 - j * step
+        dst_img_path = os.path.join(
+            self.dst_label_dir,
+            self.dst_prefix + label_name + ".png"
+        )
         cv2.imwrite(dst_img_path, dst_label_uint8)
 
     @abstractmethod

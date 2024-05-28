@@ -48,11 +48,11 @@ class PreprocessDynamicNuclearNet(Preprocess):
                 img_normalized = ((img_16bit - img_16bit.min()) /
                                   (img_16bit.max() - img_16bit.min()))
                 img = (img_normalized * 255).astype(np.uint8)
-                self.save_data(ori_data=img, data_name=basename)
+                self.save_data(data=img, data_name=basename)
 
                 # label
                 label = y[i, :, :, 0]
-                self.save_label(ori_label=label, label_name=basename)
+                self.save_label(label=label, label_name=basename)
 
 
 if __name__ == "__main__":
