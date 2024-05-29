@@ -52,7 +52,7 @@ class Preprocess:
 
     def save_label(self, ori_label: np.ndarray, label_name: str):
         self.count += 1
-        self.nuclei += np.unique(ori_label) - 1
+        self.nuclei += len(np.unique(ori_label)) - 1
         label = ori_label.astype(np.uint16)
         dst_label_uint16 = self.transform(label)
 
