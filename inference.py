@@ -29,8 +29,6 @@ def inference(args, model, data_loader):
     prompt_dict = {}
 
     for i, batched_input in enumerate(tqdm.tqdm(data_loader, desc="Inference")):
-        if i > 5:
-            break
         batched_input = to_device(batched_input, args.device)
         ori_labels = batched_input["ori_label"]
         batch_original_size = batched_input["original_size"]
