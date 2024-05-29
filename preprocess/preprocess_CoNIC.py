@@ -37,6 +37,8 @@ class PreprocessCoNIC(Preprocess):
             label = labels[i, :, :, 0]  # 0 - instance, 1 - semantic
             self.save_label(ori_label=label, label_name=f"image_{i + 1:04d}")
 
+        self.save_info(info_data={"count": self.count})
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

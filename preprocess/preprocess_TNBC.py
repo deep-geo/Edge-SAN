@@ -70,6 +70,8 @@ class PreprocessTNBC(Preprocess):
             self.save_label(ori_label=label,
                             label_name=os.path.basename(path)[:-4])
 
+        self.save_info(info_data={"count": self.count})
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

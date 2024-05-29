@@ -137,6 +137,8 @@ class PreprocessZebrafish(Preprocess):
                         self.save_label(ori_label=label,
                                         label_name=f"Zebrafish_{basename}")
 
+        self.save_info(info_data={"count": self.count})
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -2,10 +2,12 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import random
+import json
 import cv2
 import numpy as np
 
 from abc import abstractmethod
+from typing import Dict
 from utils import calc_step, get_transform
 
 
@@ -26,6 +28,8 @@ class Preprocess:
         self.dst_prefix = "" if dst_prefix is None else dst_prefix.strip()
         self.dst_prefix = self.dst_prefix + "_" if self.dst_prefix else self.dst_prefix
 
+        self.count = 0
+
     def _get_transform(self, ori_h: int, ori_w: int):
         return get_transform(self.dst_size, ori_h, ori_w)
 
@@ -38,6 +42,7 @@ class Preprocess:
         return calc_step(num_colors)
 
     def save_data(self, ori_data: np.ndarray, data_name: str):
+        self.count += 1
         dst_img = self.transform(ori_data)
         dst_img_path = os.path.join(
             self.dst_data_dir,
@@ -65,6 +70,23 @@ class Preprocess:
         dst_img_path = os.path.join(self.dst_label_dir,
                                     self.dst_prefix + label_name + ".png")
         cv2.imwrite(dst_img_path, dst_label_uint8)
+
+    def save_info(self, info_data: Dict):
+        if self.dst_prefix:
+            info_key = self.dst_prefix[:-1]
+        else:
+            info_key = os.path.basename(os.path.abspath(self.src_root))
+
+        info_path = os.path.join(self.dst_root, "info.json")
+        if os.path.exists(info_path):
+            with open(info_path, "r") as f:
+                info = json.load(f)
+                info[info_key] = info_data
+        else:
+            info = {info_key: info_data}
+
+        with open(info_path, "w") as f:
+            json.dump(info, f, indent=2)
 
     @abstractmethod
     def process(self):

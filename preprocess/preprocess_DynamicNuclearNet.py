@@ -54,6 +54,8 @@ class PreprocessDynamicNuclearNet(Preprocess):
                 label = y[i, :, :, 0]
                 self.save_label(ori_label=label, label_name=basename)
 
+        self.save_info(info_data={"count": self.count})
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
