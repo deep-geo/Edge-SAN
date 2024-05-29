@@ -1,4 +1,5 @@
 /fluorescence
+/wandb
 /workdir
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -137,6 +137,6 @@ def main(args):
 if __name__ == '__main__':
     args = parse_inference_args()
     args.encoder_adapter = True
-    args.sam_checkpoint = "epoch0077_test-loss0.1181_sam.pth"
-    args.data_root = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/cpm15"
+    # args.sam_checkpoint = "epoch0077_test-loss0.1181_sam.pth"
+    # args.data_root = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/cpm15"
     main(args)
