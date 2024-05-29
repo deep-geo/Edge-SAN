@@ -13,7 +13,8 @@ from torch.utils.data import DataLoader
 from torch.nn import functional as F
 from DataLoader import TrainingDataset, TestingDataset, stack_dict_batched
 from utils import FocalDiceloss_IoULoss, get_logger, generate_point, \
-    setting_prompt_none, save_masks, parse_train_args, postprocess_masks
+    setting_prompt_none, save_masks, postprocess_masks
+from arguments import parse_train_args
 from metrics import SegMetrics
 from tqdm import tqdm
 from pseudo import PseudoSchedular, generate_pseudo

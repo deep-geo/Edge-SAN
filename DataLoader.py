@@ -34,11 +34,17 @@ class TestingDataset(Dataset):
         self.prompt_list = {} if prompt_path is None else json.load(open(prompt_path, "r"))
         self.requires_name = requires_name
         self.point_num = point_num
+        self.split_paths = split_paths
+        self.image_paths, self.label_paths = self.read_data()
 
-        self.image_paths = []
-        self.label_paths = []
+        self.pixel_mean = [123.675, 116.28, 103.53]
+        self.pixel_std = [58.395, 57.12, 57.375]
 
-        for i, split_path in enumerate(split_paths):
+    def read_data(self):
+        image_paths = []
+        label_paths = []
+
+        for i, split_path in enumerate(self.split_paths):
             with open(split_path, "r") as f:
                 split_data = json.load(f)
 
@@ -50,11 +56,10 @@ class TestingDataset(Dataset):
                 label = np.load(label_path)
                 vals = sorted([val for val in np.unique(label) if val != 0])
                 for val in vals:
-                    self.image_paths.append(data_path)
-                    self.label_paths.append((val, label_path))
+                    image_paths.append(data_path)
+                    label_paths.append((val, label_path))
 
-        self.pixel_mean = [123.675, 116.28, 103.53]
-        self.pixel_std = [58.395, 57.12, 57.375]
+        return image_paths, label_paths
     
     def __getitem__(self, index):
         """
@@ -252,31 +257,30 @@ def stack_dict_batched(batched_input):
     return out_dict
 
 
-class UnsupervisedDataset(Dataset):
+class TestingDatasetFolder(TestingDataset):
 
-    def __init__(self, data_root: str, ext: str, dst_size: int):
+    def __init__(self, data_root: str, requires_name=True, point_num=1,
+                 return_ori_mask=True, prompt_path=None):
         self.data_root = data_root
-        self.data_dir = os.path.join(self.data_root, "data")
-        self.label_dir = os.path.join(self.data_dir, "label")
-        os.makedirs(self.label_dir, exist_ok=True)
-        ext = ext if not ext.startswith(".") else ext[1:]
-        self.data_paths = glob.glob(os.path.join(self.data_dir, f"*.{ext}"))
-        self.dst_size = dst_size
+        super().__init__(split_paths=[], requires_name=requires_name,
+                         point_num=point_num, return_ori_mask=return_ori_mask,
+                         prompt_path=prompt_path)
 
-    def __getitem__(self, index):
-        image_input = {}
-        image_path = self.data_paths[index]
-        image = cv2.imread(image_path)
+    def read_data(self):
+        image_paths = []
+        label_paths = []
 
-        h, w, _ = image.shape
-        transforms = train_transforms(self.dst_size, h, w)
-        augments = transforms(image=image)
+        data_dir = os.path.join(self.data_root, "data")
+        label_dir = os.path.join(self.data_root, "label")
+        print(f"\nRead test data from: {self.data_root}")
+        data_paths = glob.glob(os.path.join(data_dir, "*.png"))
+        for data_path in tqdm(data_paths):
+            label_name = os.path.basename(data_path)[:-4] + ".npy"
+            label_path = os.path.join(label_dir, label_name)
+            label = np.load(label_path)
+            vals = sorted([val for val in np.unique(label) if val != 0])
+            for val in vals:
+                image_paths.append(data_path)
+                label_paths.append((val, label_path))
 
-        image_input["image"] = augments['image']
-        image_input["original_size"] = (h, w)
-        image_input["image_path"] = image_path
-
-        return image_input
-
-    def __len__(self):
-        return len(self.data_paths)
+        return image_paths, label_paths
