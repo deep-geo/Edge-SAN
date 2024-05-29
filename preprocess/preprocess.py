@@ -29,6 +29,7 @@ class Preprocess:
         self.dst_prefix = self.dst_prefix + "_" if self.dst_prefix else self.dst_prefix
 
         self.count = 0
+        self.nuclei = 0
 
     def _get_transform(self, ori_h: int, ori_w: int):
         return get_transform(self.dst_size, ori_h, ori_w)
@@ -42,7 +43,6 @@ class Preprocess:
         return calc_step(num_colors)
 
     def save_data(self, ori_data: np.ndarray, data_name: str):
-        self.count += 1
         dst_img = self.transform(ori_data)
         dst_img_path = os.path.join(
             self.dst_data_dir,
@@ -51,6 +51,8 @@ class Preprocess:
         cv2.imwrite(dst_img_path, dst_img)
 
     def save_label(self, ori_label: np.ndarray, label_name: str):
+        self.count += 1
+        self.nuclei += np.unique(ori_label) - 1
         label = ori_label.astype(np.uint16)
         dst_label_uint16 = self.transform(label)
 
@@ -71,7 +73,7 @@ class Preprocess:
                                     self.dst_prefix + label_name + ".png")
         cv2.imwrite(dst_img_path, dst_label_uint8)
 
-    def save_info(self, info_data: Dict):
+    def save_info(self):
         if self.dst_prefix:
             info_key = self.dst_prefix[:-1]
         else:
@@ -81,9 +83,9 @@ class Preprocess:
         if os.path.exists(info_path):
             with open(info_path, "r") as f:
                 info = json.load(f)
-                info[info_key] = info_data
+                info[info_key] = {"count": self.count, "nuclei": self.nuclei}
         else:
-            info = {info_key: info_data}
+            info = {info_key: {"count": self.count, "nuclei": self.nuclei}}
 
         with open(info_path, "w") as f:
             json.dump(info, f, indent=2)

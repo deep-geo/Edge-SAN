@@ -99,7 +99,7 @@ class PreprocessMoNuSeg2018(Preprocess):
 
             self.save_label(ori_label=label, label_name=basename[:-4])
 
-        self.save_info(info_data={"count": self.count})
+        self.save_info()
 
 
 if __name__ == "__main__":

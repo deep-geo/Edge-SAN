@@ -48,7 +48,7 @@ class PreprocessGlandSeg(Preprocess):
             label = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
             self.save_label(ori_label=label, label_name=f"image_{i + 1:04d}")
 
-        self.save_info(info_data={"count": self.count})
+        self.save_info()
 
 
 if __name__ == "__main__":

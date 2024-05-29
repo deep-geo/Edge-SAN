@@ -24,6 +24,8 @@ class PreprocessDynamicNuclearNet(Preprocess):
 
         counter = {}
 
+        step = 10
+
         for split in ["train", "test", "val"]:
             print(f"\nProcess {split} data...")
 
@@ -33,7 +35,7 @@ class PreprocessDynamicNuclearNet(Preprocess):
             y = src_data["y"]
             filenames = src_data["meta"][1:, 0]
 
-            for i in tqdm.tqdm(range(len(filenames))):
+            for i in tqdm.tqdm(range(0, len(filenames), step)):
                 filename = filenames[i]
                 filename = os.path.basename(filename)[:-4]
                 if filename not in counter:
@@ -54,7 +56,7 @@ class PreprocessDynamicNuclearNet(Preprocess):
                 label = y[i, :, :, 0]
                 self.save_label(ori_label=label, label_name=basename)
 
-        self.save_info(info_data={"count": self.count})
+        self.save_info()
 
 
 if __name__ == "__main__":

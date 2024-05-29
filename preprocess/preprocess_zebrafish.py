@@ -69,6 +69,8 @@ class PreprocessZebrafish(Preprocess):
 
     def process(self):
 
+        step = 10
+
         print("\nProcess Mouse(NucMM-M)...")
         src_data_dir = os.path.join(self.src_root, "Mouse(NucMM-M)", "Image")
         src_label_dir = os.path.join(self.src_root, "Mouse(NucMM-M)", "Label")
@@ -84,7 +86,7 @@ class PreprocessZebrafish(Preprocess):
                 labels = np.array(labels['main'])
 
                 for dim in range(3):
-                    for i in range(images.shape[dim]):
+                    for i in range(0, images.shape[dim], step):
                         basename = data_basename[:-3] + f"_slice{i:03d}" + f"_dim{dim}"
 
                         if dim == 0:
@@ -119,7 +121,7 @@ class PreprocessZebrafish(Preprocess):
                 labels = np.array(labels['main'])
 
                 for dim in range(3):
-                    for i in range(images.shape[dim]):
+                    for i in range(0, images.shape[dim], step):
                         basename = data_basename[:-3] + f"_slice{i:03d}" + f"_dim{dim}"
 
                         if dim == 0:
@@ -137,7 +139,7 @@ class PreprocessZebrafish(Preprocess):
                         self.save_label(ori_label=label,
                                         label_name=f"Zebrafish_{basename}")
 
-        self.save_info(info_data={"count": self.count})
+        self.save_info()
 
 
 if __name__ == "__main__":

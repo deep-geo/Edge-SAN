@@ -84,7 +84,7 @@ class PreprocessKumar(Preprocess):
                 self.save_label(ori_label=label,
                                 label_name=os.path.basename(path)[:-4])
 
-        self.save_info(info_data={"count": self.count})
+        self.save_info()
 
 
 if __name__ == "__main__":
