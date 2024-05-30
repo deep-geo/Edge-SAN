@@ -268,8 +268,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
 def main(args):
 
-    metric_names = ['iou', 'dice', 'precision', 'f1_score', 'recall',
-                    'specificity', 'accuracy', 'hausdorff_distance']
+    metric_names = args.metrics
 
     model = sam_model_registry[args.model_type](args).to(args.device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
