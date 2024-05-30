@@ -10,13 +10,15 @@ import albumentations as A
 
 from albumentations.pytorch import ToTensorV2
 from tqdm import tqdm
-from utils import get_boxes_from_mask, init_point_sampling, train_transforms
+from utils import get_boxes_from_mask, init_point_sampling
 from torch.utils.data import Dataset
 
 
 class TestingDataset(Dataset):
     
-    def __init__(self, split_paths, requires_name=True, point_num=1, return_ori_mask=True, prompt_path=None):
+    def __init__(self, split_paths, requires_name=True, point_num=1,
+                 return_ori_mask=True, prompt_path=None,
+                 has_prefix: bool = False):
         """
         Initializes a TestingDataset object.
         Args:
@@ -31,7 +33,8 @@ class TestingDataset(Dataset):
         """
         self.return_ori_mask = return_ori_mask
         self.prompt_path = prompt_path
-        self.prompt_list = {} if prompt_path is None else json.load(open(prompt_path, "r"))
+        self.prompt_list = {} if prompt_path is None \
+            else json.load(open(prompt_path, "r"))
         self.requires_name = requires_name
         self.point_num = point_num
         self.split_paths = split_paths
@@ -83,7 +86,8 @@ class TestingDataset(Dataset):
         ori_np_mask[ori_np_mask == mask_val] = 1
 
         assert np.array_equal(ori_np_mask, ori_np_mask.astype(bool)), \
-            f"Mask should only contain binary values 0 and 1. {self.label_paths[index]}"
+            (f"Mask should only contain binary values 0 and 1. "
+             f"{self.label_paths[index]}")
 
         h, w = ori_np_mask.shape
         ori_mask = torch.tensor(ori_np_mask).unsqueeze(0) # ori_mask = torch.tensor(cv2.resize(ori_np_mask, (self.image_size, self.image_size))).unsqueeze(0)
@@ -93,7 +97,7 @@ class TestingDataset(Dataset):
         image, mask = augments['image'], augments['mask'].to(torch.int64)
 
         if self.prompt_path is None:
-            boxes = get_boxes_from_mask(mask, max_pixel = 0)
+            boxes = get_boxes_from_mask(mask, max_pixel=0)
             point_coords, point_labels = init_point_sampling(mask, self.point_num)
         else:
             prompt_key = mask_path.split('/')[-1]

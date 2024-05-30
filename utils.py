@@ -14,6 +14,21 @@ from skimage.measure import label, regionprops
 STEP = 15
 
 
+def to_device(batch_input, device):
+    device_input = {}
+    for key, value in batch_input.items():
+        if value is not None:
+            if key == 'image' or key == 'label':
+                device_input[key] = value.float().to(device)
+            elif type(value) is list or type(value) is torch.Size:
+                device_input[key] = value
+            else:
+                device_input[key] = value.to(device)
+        else:
+            device_input[key] = value
+    return device_input
+
+
 def get_boxes_from_mask(mask, box_num=1, std = 0.1, max_pixel = 5):
     """
     Args:
@@ -487,3 +502,47 @@ def postprocess_masks(low_res_masks, image_size, original_size):
         pad = None
 
     return masks, pad
+
+
+def prompt_and_decoder(args, batched_input, model, image_embeddings,
+                       decoder_iter=False):
+    if batched_input["point_coords"] is not None:
+        points = (batched_input["point_coords"], batched_input["point_labels"])
+    else:
+        points = None
+
+    if decoder_iter:
+        with torch.no_grad():
+            sparse_embeddings, dense_embeddings = model.prompt_encoder(
+                points=points,
+                boxes=batched_input.get("boxes", None),
+                masks=batched_input.get("mask_inputs", None),
+            )
+
+    else:
+        sparse_embeddings, dense_embeddings = model.prompt_encoder(
+            points=points,
+            boxes=batched_input.get("boxes", None),
+            masks=batched_input.get("mask_inputs", None),
+        )
+
+    low_res_masks, iou_predictions = model.mask_decoder(
+        image_embeddings=image_embeddings,
+        image_pe=model.prompt_encoder.get_dense_pe(),
+        sparse_prompt_embeddings=sparse_embeddings,
+        dense_prompt_embeddings=dense_embeddings,
+        multimask_output=args.multimask,
+    )
+
+    if args.multimask:
+        max_values, max_indexs = torch.max(iou_predictions, dim=1)
+        max_values = max_values.unsqueeze(1)
+        iou_predictions = max_values
+        low_res = []
+        for i, idx in enumerate(max_indexs):
+            low_res.append(low_res_masks[i:i + 1, idx])
+        low_res_masks = torch.stack(low_res, 0)
+
+    masks = F.interpolate(low_res_masks, (args.image_size, args.image_size),
+                          mode="bilinear", align_corners=False)
+    return masks, low_res_masks, iou_predictions

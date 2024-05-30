@@ -5,13 +5,12 @@ import numpy as np
 import datetime
 import wandb
 
-from train import to_device
 from arguments import parse_inference_args
 from segment_anything import sam_model_registry
 from DataLoader import TestingDatasetFolder
 from torch.utils.data import DataLoader
-from utils import FocalDiceloss_IoULoss, generate_point, save_masks, postprocess_masks
-from train import prompt_and_decoder
+from utils import FocalDiceloss_IoULoss, generate_point, save_masks, \
+    postprocess_masks, to_device, prompt_and_decoder
 from metrics import SegMetrics
 
 torch.set_default_dtype(torch.float32)
@@ -89,7 +88,7 @@ def inference(args, model, data_loader):
                        original_size, pad, batched_input.get("boxes", None),
                        points_show)
 
-        loss = criterion(masks, ori_labels, iou_predictions)
+        loss = criterion(masks, pred_masks, ori_labels, iou_predictions)
         losses.append(loss.item())
 
         test_batch_metrics = SegMetrics(masks, ori_labels, args.metrics)

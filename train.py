@@ -10,10 +10,10 @@ import wandb
 from segment_anything import sam_model_registry
 from torch import optim
 from torch.utils.data import DataLoader
-from torch.nn import functional as F
 from DataLoader import TrainingDataset, TestingDataset, stack_dict_batched
 from utils import FocalDiceloss_IoULoss, get_logger, generate_point, \
-    setting_prompt_none, save_masks, postprocess_masks
+    setting_prompt_none, save_masks, postprocess_masks, to_device, \
+    prompt_and_decoder
 from arguments import parse_train_args
 from metrics import SegMetrics
 from tqdm import tqdm
@@ -21,65 +21,6 @@ from pseudo import PseudoSchedular, generate_pseudo
 
 torch.set_default_dtype(torch.float32)
 max_num_chkpt = 3
-
-
-def to_device(batch_input, device):
-    device_input = {}
-    for key, value in batch_input.items():
-        if value is not None:
-            if key == 'image' or key == 'label':
-                device_input[key] = value.float().to(device)
-            elif type(value) is list or type(value) is torch.Size:
-                device_input[key] = value
-            else:
-                device_input[key] = value.to(device)
-        else:
-            device_input[key] = value
-    return device_input
-
-
-def prompt_and_decoder(args, batched_input, model, image_embeddings,
-                       decoder_iter=False):
-    if batched_input["point_coords"] is not None:
-        points = (batched_input["point_coords"], batched_input["point_labels"])
-    else:
-        points = None
-
-    if decoder_iter:
-        with torch.no_grad():
-            sparse_embeddings, dense_embeddings = model.prompt_encoder(
-                points=points,
-                boxes=batched_input.get("boxes", None),
-                masks=batched_input.get("mask_inputs", None),
-            )
-
-    else:
-        sparse_embeddings, dense_embeddings = model.prompt_encoder(
-            points=points,
-            boxes=batched_input.get("boxes", None),
-            masks=batched_input.get("mask_inputs", None),
-        )
-
-    low_res_masks, iou_predictions = model.mask_decoder(
-        image_embeddings=image_embeddings,
-        image_pe=model.prompt_encoder.get_dense_pe(),
-        sparse_prompt_embeddings=sparse_embeddings,
-        dense_prompt_embeddings=dense_embeddings,
-        multimask_output=args.multimask,
-    )
-
-    if args.multimask:
-        max_values, max_indexs = torch.max(iou_predictions, dim=1)
-        max_values = max_values.unsqueeze(1)
-        iou_predictions = max_values
-        low_res = []
-        for i, idx in enumerate(max_indexs):
-            low_res.append(low_res_masks[i:i + 1, idx])
-        low_res_masks = torch.stack(low_res, 0)
-
-    masks = F.interpolate(low_res_masks, (args.image_size, args.image_size),
-                          mode="bilinear", align_corners=False)
-    return masks, low_res_masks, iou_predictions
 
 
 @torch.no_grad()
@@ -157,7 +98,7 @@ def eval_model(args, model, test_loader):
         loss = criterion(masks, ori_labels, iou_predictions)
         test_loss.append(loss.item())
 
-        test_batch_metrics = SegMetrics(masks, ori_labels, args.metrics)
+        test_batch_metrics = SegMetrics(masks, pred_mask, ori_labels, args.metrics)
         test_batch_metrics = [round(metric, 4) for metric in test_batch_metrics]
 
         for j in range(len(args.metrics)):
@@ -283,7 +224,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
         train_loader.set_postfix(train_loss=loss.item())
 
-        train_batch_metrics = SegMetrics(masks, labels, args.metrics)
+        train_batch_metrics = SegMetrics(masks, pred_masks, labels, args.metrics)
         train_iter_metrics = [train_iter_metrics[i] + train_batch_metrics[i]
                               for i in range(len(args.metrics))]
 
