@@ -29,13 +29,16 @@ max_num_chkpt = 3
 def eval_model(args, model, test_loader):
     criterion = FocalDiceloss_IoULoss()
     model.eval()
-    mask_predictor = MaskPredictor(
-        model=model,
-        pred_iou_thresh=args.pred_iou_thresh,
-        stability_score_thresh=args.stability_score_thresh,
-        points_per_side=args.points_per_side,
-        points_per_batch=args.points_per_batch
-    )
+    if args.predict_masks:
+        mask_predictor = MaskPredictor(
+            model=model,
+            pred_iou_thresh=args.pred_iou_thresh,
+            stability_score_thresh=args.stability_score_thresh,
+            points_per_side=args.points_per_side,
+            points_per_batch=args.points_per_batch
+        )
+    else:
+        mask_predictor = None
     test_loss = []
     miss_rate = []
     test_iter_metrics = [0] * len(args.metrics)
@@ -108,9 +111,11 @@ def eval_model(args, model, test_loader):
         test_loss.append(loss.item())
 
         # generate predict masks
-        image_paths = batched_input["image_path"]
-        pred_masks = mask_predictor.batch_predict(image_paths)
-        pred_masks = torch.stack(pred_masks).unsqueeze(1)
+        pred_masks = None
+        if args.predict_masks:
+            image_paths = batched_input["image_path"]
+            pred_masks = mask_predictor.batch_predict(image_paths)
+            pred_masks = torch.stack(pred_masks).unsqueeze(1)
 
         test_batch_metrics = SegMetrics(masks, pred_masks, ori_labels, args.metrics)
         test_batch_metrics = [round(metric, 4) for metric in test_batch_metrics]
@@ -180,7 +185,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         optimizer.zero_grad()
 
         # generate predict masks
-        if args.pred_masks:
+        if args.predict_masks:
             mask_predictor = MaskPredictor(
                 model=model,
                 pred_iou_thresh=args.pred_iou_thresh,
