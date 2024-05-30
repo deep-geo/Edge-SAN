@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 python train.py \
---work_dir "workdir" \
---run_name "nuclei" \
+--work_dir "/root/autodl-tmp/workdir" \
+--run_name "supervised baseline" \
 --seed 42 \
 --epochs 100 \
 --batch_size 8 \
@@ -10,7 +10,7 @@ python train.py \
 --image_size 256 \
 --mask_num 8 \
 --split_paths "/root/autodl-tmp/ALL3/split.json" \
---metrics 'iou' 'dice' 'f1_score'  \
+--metrics 'iou' 'dice' 'f1_score' 'recall' \
 --device "cuda" \
 --lr 0.0001 \
 --resume "" \

@@ -38,6 +38,7 @@ def to_device(batch_input, device):
     return device_input
 
 
+
 def prompt_and_decoder(args, batched_input, model, image_embeddings,
                        decoder_iter=False):
     if batched_input["point_coords"] is not None:
