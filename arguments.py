@@ -99,6 +99,8 @@ def parse_train_args():
 
     if set(metrics_need_pred_mask) & args.metrics:
         args.predict_masks = True
+        print(f"predict_masks is activated according to the metrics: "
+              f"{set(metrics_need_pred_mask) & args.metrics}")
 
     return args
 
@@ -164,5 +166,7 @@ def parse_inference_args():
 
     if set(metrics_need_pred_mask) & args.metrics:
         args.predict_masks = True
+        print(f"predict_masks is activated according to the metrics: "
+              f"{set(metrics_need_pred_mask) & args.metrics}")
 
     return args
