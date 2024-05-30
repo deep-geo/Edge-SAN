@@ -354,7 +354,8 @@ def main(args):
                                   requires_name=True,
                                   point_num=args.point_num,
                                   return_ori_mask=True,
-                                  prompt_path=args.prompt_path)
+                                  prompt_path=args.prompt_path,
+                                  sample_rate=args.test_sample_rate)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
                               shuffle=True, num_workers=args.num_workers)
     test_loader = DataLoader(dataset=test_dataset, batch_size=args.batch_size,

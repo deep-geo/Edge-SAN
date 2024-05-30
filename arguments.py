@@ -21,6 +21,8 @@ def parse_train_args():
                         help="number of epochs")
     parser.add_argument("--batch_size", type=int, default=8,
                         help="train batch size")
+    parser.add_argument("--test_sample_rate", type=float, default=1.0,
+                        help="sample rate of test set")
     parser.add_argument("--num_workers", type=int, default=8,
                         help="Dataloader workers")
     parser.add_argument("--image_size", type=int, default=256,
