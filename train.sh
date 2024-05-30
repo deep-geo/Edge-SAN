@@ -6,6 +6,7 @@ python train.py \
 --seed 42 \
 --epochs 100000 \
 --batch_size 8 \
+--test_sample_rate 1.0 \
 --num_workers 8 \
 --image_size 256 \
 --mask_num 5 \
