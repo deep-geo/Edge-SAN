@@ -115,6 +115,7 @@ def eval_model(args, model, test_loader):
         if args.predict_masks:
             image_paths = batched_input["image_path"]
             pred_masks = mask_predictor.batch_predict(image_paths)
+            pred_masks = [_ for _ in pred_masks for _ in range(args.mask_num)]
             pred_masks = torch.tensor(np.array(pred_masks, dtype=np.int32)).unsqueeze(1)
 
         test_batch_metrics = SegMetrics(masks, pred_masks, ori_labels, args.metrics)
@@ -196,6 +197,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             )
             image_paths = batched_input["image_path"]
             pred_masks = mask_predictor.batch_predict(image_paths)
+            pred_masks = [_ for _ in pred_masks for _ in range(args.mask_num)]
             pred_masks = torch.tensor(np.array(pred_masks, dtype=np.int32)).unsqueeze(1)
 
         if int(batch + 1) % 50 == 0:
