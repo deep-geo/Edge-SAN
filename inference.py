@@ -103,7 +103,7 @@ def inference(args, model, data_loader):
         if args.predict_masks:
             image_paths = batched_input["image_path"]
             pred_masks = mask_predictor.batch_predict(image_paths)
-            pred_masks = torch.tensor(np.array(pred_masks, dtype=np.int32)).unsqueeze(1)
+            pred_masks = torch.tensor(np.array(pred_masks, dtype=np.int32)).unsqueeze(1).to(args.device)
 
         loss = criterion(masks, ori_labels, iou_predictions)
         losses.append(loss.item())

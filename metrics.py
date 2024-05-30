@@ -217,7 +217,7 @@ def SegMetrics(pred, pred_mask, label, metrics):
         elif metric == 'specificity':
             metric_list.append(np.mean(specificity(pred, label)))
         elif metric == 'aji':
-            metric_list.append(aji(pred_mask, label).cpu().numpy().mean())
+            metric_list.append(aji(pred_mask, label))
         elif metric == 'dq':
             metric_list.append(dq(pred_mask, label))
         elif metric == 'sq':
