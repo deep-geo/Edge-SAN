@@ -10,7 +10,7 @@ from segment_anything import sam_model_registry
 from DataLoader import TestingDatasetFolder
 from torch.utils.data import DataLoader
 from utils import (generate_point, save_masks, postprocess_masks, to_device,
-                   prompt_and_decoder)
+                   prompt_and_decoder, MaskPredictor)
 from loss import FocalDiceloss_IoULoss
 from metrics import SegMetrics
 
@@ -23,6 +23,17 @@ def inference(args, model, data_loader):
     model.eval()
 
     metrics_data = {_: [] for _ in args.metrics}
+    pred_masks = None
+    if args.predict_masks:
+        mask_predictor = MaskPredictor(
+            model=model,
+            pred_iou_thresh=args.pred_iou_thresh,
+            stability_score_thresh=args.stability_score_thresh,
+            points_per_side=args.points_per_side,
+            points_per_batch=args.points_per_batch
+        )
+    else:
+        mask_predictor = None
 
     losses = []
     miss_rate = []
@@ -89,13 +100,20 @@ def inference(args, model, data_loader):
                        original_size, pad, batched_input.get("boxes", None),
                        points_show)
 
-        loss = criterion(masks, pred_masks, ori_labels, iou_predictions)
+        if args.predict_masks:
+            image_paths = batched_input["image_path"]
+            pred_masks = mask_predictor.batch_predict(image_paths)
+            pred_masks = torch.tensor(np.array(pred_masks, dtype=np.int32)).unsqueeze(1)
+
+        loss = criterion(masks, ori_labels, iou_predictions)
         losses.append(loss.item())
 
-        test_batch_metrics = SegMetrics(masks, ori_labels, args.metrics)
+        test_batch_metrics = SegMetrics(masks, pred_masks, ori_labels, args.metrics)
 
         for j in range(len(args.metrics)):
             metrics_data[args.metrics[j]].append(test_batch_metrics[j])
+
+        # print("metrics_data: ", metrics_data)
 
     average_metrics = {key: np.mean(vals) for key, vals in metrics_data.items()}
     average_loss = np.mean(losses)
@@ -137,4 +155,9 @@ def main(args):
 if __name__ == '__main__':
     args = parse_inference_args()
     args.encoder_adapter = True
+    # args.batch_size = 1
+    # args.data_root = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/cpm15"
+    # args.pred_iou_thresh = 0.8
+    # args.stability_score_thresh = 0.9
+    # args.sam_checkpoint = "epoch0077_test-loss0.1181_sam.pth"
     main(args)

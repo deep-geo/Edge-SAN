@@ -12,7 +12,7 @@ from scipy.optimize import linear_sum_assignment
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-metrics_need_pred_mask = ["aj", "dq", "sq", "pq"]
+metrics_need_pred_mask = ["aji", "dq", "sq", "pq"]
 
 
 def _threshold(x, threshold=None):
@@ -217,13 +217,13 @@ def SegMetrics(pred, pred_mask, label, metrics):
         elif metric == 'specificity':
             metric_list.append(np.mean(specificity(pred, label)))
         elif metric == 'aji':
-            metric_list.append(np.mean(aji(pred, label)))
+            metric_list.append(aji(pred_mask, label).cpu().numpy().mean())
         elif metric == 'dq':
-            metric_list.append(np.mean(dq(pred, label)))
+            metric_list.append(dq(pred_mask, label))
         elif metric == 'sq':
-            metric_list.append(np.mean(sq(pred, label)))
+            metric_list.append(sq(pred_mask, label))
         elif metric == 'pq':
-            metric_list.append(np.mean(pq(pred, label)))
+            metric_list.append(pq(pred_mask, label))
         else:
             raise ValueError('metric %s not recognized' % metric)
     if pred is not None:

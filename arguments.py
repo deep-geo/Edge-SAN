@@ -137,7 +137,7 @@ def parse_inference_args():
         "--metrics",
         nargs='+',
         default=['iou', 'dice', 'precision', 'f1_score', 'recall',
-                 'specificity', 'accuracy'],
+                 'specificity', 'accuracy', 'aji', 'dq', 'sq', 'pq'],
         help="metrics"
     )
     parser.add_argument("--pred_iou_thresh", type=float, default=0.88,
