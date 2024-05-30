@@ -20,6 +20,10 @@ python train.py \
 --iter_point 8 \
 --encoder_adapter \
 --multimask \
+--pred_iou_thresh 0.88 \
+--stability_score_thresh 0.95 \
+--points_per_side 32 \
+--points_per_batch 256 \
 #--prompt_path
 #--save_pred
 #--lr_scheduler \

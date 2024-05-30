@@ -3,6 +3,8 @@ import re
 import random
 import datetime
 import glob
+
+import cv2
 import numpy as np
 import torch
 import wandb
@@ -12,7 +14,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from DataLoader import TrainingDataset, TestingDataset, stack_dict_batched
 from utils import get_logger, generate_point, setting_prompt_none, save_masks, \
-    postprocess_masks, to_device, prompt_and_decoder
+    postprocess_masks, to_device, prompt_and_decoder, MaskPredictor
 from loss import FocalDiceloss_IoULoss
 from arguments import parse_train_args
 from metrics import SegMetrics
@@ -27,6 +29,13 @@ max_num_chkpt = 3
 def eval_model(args, model, test_loader):
     criterion = FocalDiceloss_IoULoss()
     model.eval()
+    mask_predictor = MaskPredictor(
+        model=model,
+        pred_iou_thresh=args.pred_iou_thresh,
+        stability_score_thresh=args.stability_score_thresh,
+        points_per_side=args.points_per_side,
+        points_per_batch=args.points_per_batch
+    )
     test_loss = []
     miss_rate = []
     test_iter_metrics = [0] * len(args.metrics)
@@ -98,7 +107,12 @@ def eval_model(args, model, test_loader):
         loss = criterion(masks, ori_labels, iou_predictions)
         test_loss.append(loss.item())
 
-        test_batch_metrics = SegMetrics(masks, pred_mask, ori_labels, args.metrics)
+        # generate predict masks
+        image_paths = batched_input["image_path"]
+        pred_masks = mask_predictor.batch_predict(image_paths)
+        pred_masks = torch.stack(pred_masks).unsqueeze(1)
+
+        test_batch_metrics = SegMetrics(masks, pred_masks, ori_labels, args.metrics)
         test_batch_metrics = [round(metric, 4) for metric in test_batch_metrics]
 
         for j in range(len(args.metrics)):
@@ -118,6 +132,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
     train_iter_metrics = [0] * len(args.metrics)
 
     pseudo_weights = None
+    pred_masks = None
 
     for batch, batched_input in enumerate(train_loader):
 
@@ -164,10 +179,24 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         optimizer.step()
         optimizer.zero_grad()
 
+        # generate predict masks
+        if args.pred_masks:
+            mask_predictor = MaskPredictor(
+                model=model,
+                pred_iou_thresh=args.pred_iou_thresh,
+                stability_score_thresh=args.stability_score_thresh,
+                points_per_side=args.points_per_side,
+                points_per_batch=args.points_per_batch
+
+            )
+            image_paths = batched_input["image_path"]
+            pred_masks = mask_predictor.batch_predict(image_paths)
+            pred_masks = torch.stack(pred_masks).unsqueeze(1)
+
         if int(batch + 1) % 50 == 0:
             print(
                 f'Epoch: {epoch + 1}, Batch: {batch + 1}, '
-                f'first {flag} prompt: {SegMetrics(masks, labels, args.metrics)}'
+                f'first {flag} prompt: {SegMetrics(masks, pred_masks, labels, args.metrics)}'
             )
 
         point_num = random.choice(args.point_list)
@@ -206,11 +235,11 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                 if iter == init_mask_num or iter == args.iter_point - 1:
                     print(
                         f'Epoch: {epoch + 1}, Batch: {batch + 1}, '
-                        f'mask prompt: {SegMetrics(masks, labels, args.metrics)}')
+                        f'mask prompt: {SegMetrics(masks, pred_masks, labels, args.metrics)}')
                 else:
                     print(
                         f'Epoch: {epoch + 1}, Batch: {batch + 1}, '
-                        f'point {point_num} prompt: {SegMetrics(masks, labels, args.metrics)}')
+                        f'point {point_num} prompt: {SegMetrics(masks, pred_masks, labels, args.metrics)}')
 
         if int(batch + 1) % 200 == 0:
             print(

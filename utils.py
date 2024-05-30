@@ -5,9 +5,11 @@ import cv2
 import torch
 import albumentations as A
 
+from typing import List
 from albumentations.pytorch import ToTensorV2
 from torch.nn import functional as F
 from skimage.measure import label, regionprops
+from segment_anything import SamAutomaticMaskGenerator
 
 STEP = 15
 
@@ -393,3 +395,70 @@ def prompt_and_decoder(args, batched_input, model, image_embeddings,
     masks = F.interpolate(low_res_masks, (args.image_size, args.image_size),
                           mode="bilinear", align_corners=False)
     return masks, low_res_masks, iou_predictions
+
+
+class MaskPredictor:
+
+    def __init__(self, model, pred_iou_thresh: float, stability_score_thresh: float,
+                 points_per_side: int = 32, points_per_batch: int = 256, **kwargs):
+        self.generator = SamAutomaticMaskGenerator(
+            model=model,
+            pred_iou_thresh=pred_iou_thresh,
+            stability_score_thresh=stability_score_thresh,
+            stability_score_offset=1.0,
+            box_nms_thresh=0.7,
+            min_mask_region_area=10,
+            points_per_side=points_per_side,
+            points_per_batch=points_per_batch
+        )
+
+    def predict(self, image: np.ndarray):
+        """
+        image: RGB image
+        """
+        self.generator.predictor.model.eval()
+        masks = self.generator.generate(image)
+        pred_mask = np.zeros(shape=(image.shape[0], image.shape[1]), dtype=np.uint16)
+        for i, mask_data in enumerate(masks):
+            mask = mask_data["segmentation"]
+            pred_mask[mask] = i + 1
+
+        return pred_mask
+
+    def batch_predict(self, images: List[np.ndarray] | List[str]):
+        """
+        image: RGB images or image paths
+        """
+        if isinstance(images[0], str):
+            images = [cv2.cvtColor(cv2.imread(_), cv2.COLOR_BGR2RGB) for _ in images]
+        masks = [self.predict(_) for _ in images]
+        return masks
+
+
+if __name__ == "__main__":
+    # test
+    from segment_anything.build_sam import _build_sam
+    model = _build_sam(
+        encoder_embed_dim=768,
+        encoder_depth=12,
+        encoder_num_heads=12,
+        encoder_global_attn_indexes=[2, 5, 8, 11],
+        image_size=256,
+        checkpoint="epoch0077_test-loss0.1181_sam.pth",
+        encoder_adapter=True
+    ).to("cpu")
+    mask_predictor = MaskPredictor(
+        model=model, pred_iou_thresh=0.8, stability_score_thresh=0.9
+    )
+    image = cv2.imread("CoNIC_image_0001.png")
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    mask = mask_predictor.predict(image)
+    print("mask values: ", np.unique(mask))
+    mask = mask / mask.max() * 255
+    mask = mask.astype(np.uint8)
+    cv2.imshow("mask", mask)
+    cv2.waitKey(0)
+
+
+
+

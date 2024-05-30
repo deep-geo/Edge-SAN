@@ -18,7 +18,7 @@ class TestingDataset(Dataset):
     
     def __init__(self, split_paths, requires_name=True, point_num=1,
                  return_ori_mask=True, prompt_path=None,
-                 has_prefix: bool = False):
+                 sample_rate: float = 1.0):
         """
         Initializes a TestingDataset object.
         Args:
@@ -42,6 +42,12 @@ class TestingDataset(Dataset):
 
         self.pixel_mean = [123.675, 116.28, 103.53]
         self.pixel_std = [58.395, 57.12, 57.375]
+
+        self.sample_rate = sample_rate
+        self.sample_indices = random.choices(
+            range(len(self.image_paths)),
+            k=int(len(self.image_paths) * self.sample_rate)
+        )
 
     def read_data(self):
         image_paths = []
@@ -73,12 +79,12 @@ class TestingDataset(Dataset):
             dict: A dictionary containing the preprocessed image and
                 associated information.
         """
+        index = self.sample_indices[index]
+
         image_input = {}
-        try:
-            image = cv2.imread(self.image_paths[index])
-            image = (image - self.pixel_mean) / self.pixel_std
-        except:
-            print(self.image_paths[index])
+        image_path = self.image_paths[index]
+        image = cv2.imread(image_path)
+        image = (image - self.pixel_mean) / self.pixel_std
 
         mask_val, mask_path = self.label_paths[index]
         ori_np_mask = np.load(mask_path).astype(np.float32)
@@ -114,6 +120,7 @@ class TestingDataset(Dataset):
         image_input["point_labels"] = point_labels
         image_input["boxes"] = boxes
         image_input["original_size"] = (h, w)
+        image_input["image_path"] = image_path
         image_input["label_path"] = '/'.join(mask_path.split('/')[:-1])
 
         if self.return_ori_mask:
@@ -127,7 +134,7 @@ class TestingDataset(Dataset):
             return image_input
 
     def __len__(self):
-        return len(self.label_paths)
+        return len(self.sample_indices)
 
 
 class TrainingDataset(Dataset):

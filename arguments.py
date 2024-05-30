@@ -1,6 +1,8 @@
 import argparse
 import datetime
 
+from metrics import metrics_need_pred_mask
+
 
 def parse_train_args():
     parser = argparse.ArgumentParser()
@@ -25,6 +27,9 @@ def parse_train_args():
                         help="image_size")
     parser.add_argument("--mask_num", type=int, default=5,
                         help="get mask number")
+    parser.add_argument("--predict_masks", action='store_true',
+                        help="predict masks or not")
+
     parser.add_argument("--split_paths", nargs='+', default=[],
                         help="path list of the split json files")
     parser.add_argument(
@@ -34,6 +39,15 @@ def parse_train_args():
                  'specificity', 'accuracy', 'hausdorff_distance'],
         help="metrics"
     )
+    parser.add_argument("--pred_iou_thresh", type=float, default=0.88,
+                        help="Mask filtering threshold in [0,1]")
+    parser.add_argument("--stability_score_thresh", type=float, default=0.95,
+                        help="Mask filtering threshold in [0,1]")
+    parser.add_argument("--points_per_side", type=int, default=32,
+                        help="arg for mask generator")
+    parser.add_argument("--points_per_batch", type=float, default=256,
+                        help="arg for mask generator")
+
     parser.add_argument('--device', type=str, default='cuda',
                         help="cuda or cpu")
     parser.add_argument("--lr", type=float, default=1e-4,
@@ -62,6 +76,7 @@ def parse_train_args():
                         help="fix prompt path")
     parser.add_argument("--save_pred", action='store_true',
                         help="save result")
+
     # unsupervised
     parser.add_argument("--activate_unsupervised", action="store_true",
                         help="activate unsupervised")
@@ -73,12 +88,6 @@ def parse_train_args():
                         help="epoch to start generating unsupervised dataset")
     parser.add_argument("--unsupervised_step", type=int, default=None,
                         help="step to update unsupervised dataset")
-    parser.add_argument("--unsupervised_pred_iou_thresh", type=float,
-                        default=0.88,
-                        help="Mask filtering threshold in [0,1]")
-    parser.add_argument("--unsupervised_stability_score_thresh", type=float,
-                        default=0.95,
-                        help="Mask filtering threshold in [0,1]")
     parser.add_argument("--unsupervised_weight_gr", type=float,
                         default=0.1)
 
@@ -87,6 +96,9 @@ def parse_train_args():
     args = parser.parse_args()
     if args.resume:
         args.sam_checkpoint = None
+
+    if set(metrics_need_pred_mask) & args.metrics:
+        args.predict_masks = True
 
     return args
 
@@ -105,6 +117,8 @@ def parse_inference_args():
     parser.add_argument('--device', type=str, default='cpu',
                         help="cuda or cpu")
     parser.add_argument("--image_size", type=int, default=256)
+    parser.add_argument("--predict_masks", action='store_true',
+                        help="predict masks or not")
 
     # data loader
     parser.add_argument("--data_root", type=str, default="",
@@ -122,6 +136,15 @@ def parse_inference_args():
                  'specificity', 'accuracy'],
         help="metrics"
     )
+    parser.add_argument("--pred_iou_thresh", type=float, default=0.88,
+                        help="Mask filtering threshold in [0,1]")
+    parser.add_argument("--stability_score_thresh", type=float, default=0.95,
+                        help="Mask filtering threshold in [0,1]")
+    parser.add_argument("--points_per_side", type=int, default=32,
+                        help="arg for mask generator")
+    parser.add_argument("--points_per_batch", type=float, default=256,
+                        help="arg for mask generator")
+
     parser.add_argument("--boxes_prompt", action='store_true',
                         help="use boxes prompt")
     parser.add_argument("--point_num", type=int, default=1,
@@ -138,5 +161,8 @@ def parse_inference_args():
                         help="save result")
 
     args = parser.parse_args()
+
+    if set(metrics_need_pred_mask) & args.metrics:
+        args.predict_masks = True
 
     return args

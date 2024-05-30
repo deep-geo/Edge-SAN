@@ -20,8 +20,7 @@ import torch
 
 from tqdm import tqdm
 from preprocess.split_dataset import split_dataset
-from segment_anything import SamAutomaticMaskGenerator
-from utils import get_transform, calc_step
+from utils import get_transform, calc_step, MaskPredictor
 
 
 class PseudoSchedular:
@@ -86,12 +85,10 @@ class PseudoSchedular:
 @torch.no_grad()
 def generate_pseudo(args, model, pseudo_root: str):
     model.eval()
-    generator = SamAutomaticMaskGenerator(
+    mask_predictor = MaskPredictor(
         model=model,
         pred_iou_thresh=args.unsupervised_pred_iou_thresh,
         stability_score_thresh=args.unsupervised_stability_score_thresh,
-        stability_score_offset=1.0,
-        box_nms_thresh=0.7,
         min_mask_region_area=10,
         points_per_side=28,
         points_per_batch=256
@@ -117,19 +114,15 @@ def generate_pseudo(args, model, pseudo_root: str):
 
         # mask
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        masks = generator.generate(image)
-        arr = np.zeros(shape=(image.shape[0], image.shape[1]), dtype=np.uint16)
-        for i, mask_data in enumerate(masks):
-            mask = mask_data["segmentation"]
-            arr[mask] = i + 1
+        mask = mask_predictor.predict(image)
 
         basename = os.path.basename(path)[:-4]
-        arr_path = os.path.join(pseudo_label_dir, f"{basename}.npy")
+        mask_path = os.path.join(pseudo_label_dir, f"{basename}.npy")
         img_path = os.path.join(pseudo_label_dir, f"{basename}.png")
 
         # npy
-        dst_arr = transform(image=arr)["image"]
-        np.save(arr_path, dst_arr)
+        dst_arr = transform(image=mask)["image"]
+        np.save(mask_path, dst_arr)
 
         # png
         vals_uint16 = [_ for _ in np.unique(dst_arr) if _ != 0][:255]

@@ -12,6 +12,8 @@ from scipy.optimize import linear_sum_assignment
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+metrics_need_pred_mask = ["aj", "dq", "sq", "pq"]
+
 
 def _threshold(x, threshold=None):
     if threshold is not None:

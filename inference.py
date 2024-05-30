@@ -9,8 +9,9 @@ from arguments import parse_inference_args
 from segment_anything import sam_model_registry
 from DataLoader import TestingDatasetFolder
 from torch.utils.data import DataLoader
-from utils import FocalDiceloss_IoULoss, generate_point, save_masks, \
-    postprocess_masks, to_device, prompt_and_decoder
+from utils import (generate_point, save_masks, postprocess_masks, to_device,
+                   prompt_and_decoder)
+from loss import FocalDiceloss_IoULoss
 from metrics import SegMetrics
 
 torch.set_default_dtype(torch.float32)
