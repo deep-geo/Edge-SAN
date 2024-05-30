@@ -192,7 +192,8 @@ class TrainingDataset(Dataset):
         while True:
             image_input = {}
             try:
-                image = cv2.imread(self.image_paths[index])
+                image_path = self.image_paths[index]
+                image = cv2.imread(image_path)
                 image = (image - self.pixel_mean) / self.pixel_std
             except:
                 print("read image error: ", self.image_paths[index])
@@ -245,6 +246,7 @@ class TrainingDataset(Dataset):
             image_input["boxes"] = boxes
             image_input["point_coords"] = point_coords
             image_input["point_labels"] = point_labels
+            image_input["image_path"] = image_path
             image_input["pseudo"] = self.pseudos[index]
 
             image_name = self.image_paths[index].split('/')[-1]
