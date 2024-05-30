@@ -47,7 +47,7 @@ def parse_train_args():
                         help="Mask filtering threshold in [0,1]")
     parser.add_argument("--points_per_side", type=int, default=32,
                         help="arg for mask generator")
-    parser.add_argument("--points_per_batch", type=float, default=256,
+    parser.add_argument("--points_per_batch", type=int, default=256,
                         help="arg for mask generator")
 
     parser.add_argument('--device', type=str, default='cuda',

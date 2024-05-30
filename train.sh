@@ -11,7 +11,7 @@ python train.py \
 --image_size 256 \
 --mask_num 5 \
 --split_paths "/root/autodl-tmp/datasets/SAM_nuclei_preprocessed/ALL/split.json" \
---metrics 'iou' 'dice' 'precision' 'f1_score' 'recall' 'specificity' 'accuracy' \
+--metrics 'iou' 'dice' 'precision' 'f1_score' 'recall' 'specificity' 'accuracy' 'aji' 'dq' 'sq' 'pq' \
 --device "cuda" \
 --lr 0.0001 \
 --resume "" \
