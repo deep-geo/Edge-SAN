@@ -2,8 +2,8 @@ from segment_anything import sam_model_registry
 import torch
 import argparse
 import os
-from utils import FocalDiceloss_IoULoss, generate_point, save_masks, \
-    postprocess_masks
+from utils import generate_point, save_masks,  postprocess_masks
+from loss import FocalDiceloss_IoULoss
 from torch.utils.data import DataLoader
 from DataLoader import TestingDataset
 from metrics import SegMetrics
@@ -161,7 +161,7 @@ def main(args):
         loss = criterion(masks, ori_labels, iou_predictions)
         test_loss.append(loss.item())
 
-        test_batch_metrics = SegMetrics(masks, ori_labels, args.metrics)
+        test_batch_metrics = SegMetrics(masks, None, ori_labels, args.metrics)
         test_batch_metrics = [float('{:.4f}'.format(metric)) for metric in test_batch_metrics]
 
         for j in range(len(args.metrics)):

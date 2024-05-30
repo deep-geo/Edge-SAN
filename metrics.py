@@ -193,7 +193,7 @@ def process_metrics(metric_list):
     return metric_array
 
 
-def SegMetrics(pred, label, metrics):
+def SegMetrics(pred, pred_mask, label, metrics):
     metric_list = []  
     if isinstance(metrics, str):
         metrics = [metrics, ]

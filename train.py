@@ -11,9 +11,9 @@ from segment_anything import sam_model_registry
 from torch import optim
 from torch.utils.data import DataLoader
 from DataLoader import TrainingDataset, TestingDataset, stack_dict_batched
-from utils import FocalDiceloss_IoULoss, get_logger, generate_point, \
-    setting_prompt_none, save_masks, postprocess_masks, to_device, \
-    prompt_and_decoder
+from utils import get_logger, generate_point, setting_prompt_none, save_masks, \
+    postprocess_masks, to_device, prompt_and_decoder
+from loss import FocalDiceloss_IoULoss
 from arguments import parse_train_args
 from metrics import SegMetrics
 from tqdm import tqdm
