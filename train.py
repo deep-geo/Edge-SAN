@@ -78,6 +78,8 @@ def eval_model(args, model, test_loader):
             point_coords, point_labels = [batched_input["point_coords"]], [
                 batched_input["point_labels"]]
 
+            
+
             for iter in range(args.iter_point):
                 masks, low_res_masks, iou_predictions = prompt_and_decoder(
                     args, batched_input, model, image_embeddings)
@@ -252,7 +254,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                 f"epoch:{epoch + 1}, iteration:{batch + 1}, loss:{loss.item()}")
             save_path = os.path.join(f"{args.work_dir}/models", args.run_name,
                                      f"epoch{epoch + 1}_batch{batch + 1}_sam.pth")
-            state = {'model': model.state_dict(), 'optimizer': optimizer}
+            state = {'model': model.state_dict(), 'optimizer': optimizer.state_dict()}
             torch.save(state, save_path)
 
         train_losses.append(loss.item())
@@ -375,6 +377,11 @@ def main(args):
 
     best_loss = 1e10
     l = len(train_loader)
+    
+    
+    semantic_seg_metric_names = ['dice', 'iou','precision', 'f1_score', 'recall', 'specificity','accuracy']
+    instance_seg_metric_names = ['aji', 'dq', 'sq', 'pq']
+    
 
     for epoch in range(resume_epoch, args.epochs):
         print(f"\nTrain epoch {epoch}...")
@@ -401,8 +408,15 @@ def main(args):
             eval_model(args, model, test_loader))
 
         wandb.log({"Loss/train": average_loss, "Loss/test": average_test_loss})
-        wandb.log({"miss_rate": miss_rate})
-        metrics_dict = dict(zip(metric_names, test_iter_metrics))
+        wandb.log({"Loss/miss_rate": miss_rate})
+ 
+        metrics_dict = {}
+        for name, value in zip(metric_names, test_iter_metrics):
+            if name in semantic_seg_metric_names:
+                metrics_dict[f'SemanticSeg/{name}'] = value
+            elif name in instance_seg_metric_names:
+                metrics_dict[f'InstanceSeg/{name}'] = value
+        #metrics_dict = dict(zip(metric_names, test_iter_metrics))
         wandb.log(metrics_dict)
 
         lr = scheduler.get_last_lr()[
