@@ -317,9 +317,15 @@ def main(args):
     config["resume_checkpoint"] = resume_chkpt
     wandb.init(project="SAM_Nuclei", name=args.run_name, config=config)
 
-    # todo: random seed not work
+    # Random seed Setting
     if args.seed is not None:
+        np.random.seed(args.seed)
         random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
     train_dataset = train_dataset_gt = TrainingDataset(
         split_paths=args.split_paths,
