@@ -10,14 +10,15 @@ import albumentations as A
 
 from albumentations.pytorch import ToTensorV2
 from tqdm import tqdm
-from utils import get_boxes_from_mask, init_point_sampling
+from utils import get_boxes_from_mask, init_point_sampling, get_edge_points_from_mask
 from torch.utils.data import Dataset
 
 
 class TestingDataset(Dataset):
     
-    def __init__(self, split_paths, requires_name=True, point_num=1,
-                 return_ori_mask=True, prompt_path=None,
+    def __init__(self, split_paths, requires_name: bool = True,
+                 point_num: int = 1, edge_point_num: int = 3,
+                 return_ori_mask: bool = True, prompt_path: str = None,
                  sample_rate: float = 1.0):
         """
         Initializes a TestingDataset object.
@@ -37,6 +38,7 @@ class TestingDataset(Dataset):
             else json.load(open(prompt_path, "r"))
         self.requires_name = requires_name
         self.point_num = point_num
+        self.edge_point_num = edge_point_num
         self.split_paths = split_paths
         self.image_paths, self.label_paths = self.read_data()
 
@@ -88,23 +90,26 @@ class TestingDataset(Dataset):
 
         mask_val, mask_path = self.label_paths[index]
         ori_np_mask = np.load(mask_path).astype(np.float32)
-        ori_np_mask[ori_np_mask != mask_val] = 0
-        ori_np_mask[ori_np_mask == mask_val] = 1
+        binary_mask = ori_np_mask.copy()
+        binary_mask[ori_np_mask != mask_val] = 0
+        binary_mask[ori_np_mask == mask_val] = 1
 
-        assert np.array_equal(ori_np_mask, ori_np_mask.astype(bool)), \
+        assert np.array_equal(binary_mask, binary_mask.astype(bool)), \
             (f"Mask should only contain binary values 0 and 1. "
              f"{self.label_paths[index]}")
 
         h, w = ori_np_mask.shape
-        ori_mask = torch.tensor(ori_np_mask).unsqueeze(0) # ori_mask = torch.tensor(cv2.resize(ori_np_mask, (self.image_size, self.image_size))).unsqueeze(0)
+        ori_mask = torch.tensor(binary_mask).unsqueeze(0) # ori_mask = torch.tensor(cv2.resize(ori_np_mask, (self.image_size, self.image_size))).unsqueeze(0)
 
         transforms = A.Compose([ToTensorV2(p=1.0)], p=1.)
-        augments = transforms(image=image, mask=ori_np_mask)
+        augments = transforms(image=image, mask=binary_mask)
         image, mask = augments['image'], augments['mask'].to(torch.int64)
 
         if self.prompt_path is None:
             boxes = get_boxes_from_mask(mask, max_pixel=0)
             point_coords, point_labels = init_point_sampling(mask, self.point_num)
+            edge_point_coords = get_edge_points_from_mask(mask_val, ori_np_mask,
+                                                          self.edge_point_num)
         else:
             prompt_key = mask_path.split('/')[-1]
             boxes = torch.as_tensor(
@@ -113,12 +118,15 @@ class TestingDataset(Dataset):
                 self.prompt_list[prompt_key]["point_coords"], dtype=torch.float)
             point_labels = torch.as_tensor(
                 self.prompt_list[prompt_key]["point_labels"], dtype=torch.int)
+            edge_point_coords = torch.as_tensor(
+                self.prompt_list[prompt_key]["edges"], dtype=torch.float)
 
         image_input["image"] = image
         image_input["label"] = mask.unsqueeze(0)
         image_input["point_coords"] = point_coords
         image_input["point_labels"] = point_labels
         image_input["boxes"] = boxes
+        image_input["edges"] = edge_point_coords
         image_input["original_size"] = (h, w)
         image_input["image_path"] = image_path
         image_input["label_path"] = '/'.join(mask_path.split('/')[:-1])
@@ -139,8 +147,9 @@ class TestingDataset(Dataset):
 
 class TrainingDataset(Dataset):
 
-    def __init__(self, split_paths, requires_name=True, point_num=1, mask_num=5,
-                 is_pseudo: bool = False):
+    def __init__(self, split_paths, requires_name: bool = True,
+                 point_num: int = 1, mask_num: int = 5,
+                 edge_point_num: int = 3, is_pseudo: bool = False):
         """
         Initializes a training dataset.
         Args:
@@ -151,6 +160,7 @@ class TrainingDataset(Dataset):
         """
         self.requires_name = requires_name
         self.point_num = point_num
+        self.edge_point_num = edge_point_num
         self.mask_num = mask_num
         self.pixel_mean = [123.675, 116.28, 103.53]
         self.pixel_std = [58.395, 57.12, 57.375]
@@ -206,6 +216,7 @@ class TrainingDataset(Dataset):
             masks_list = []
             boxes_list = []
             point_coords_list, point_labels_list = [], []
+            edge_point_coords_list = []
             # mask_path = random.choices(self.label_paths[index], k=self.mask_num)
 
             mask_path = self.label_paths[index]
@@ -228,24 +239,29 @@ class TrainingDataset(Dataset):
                                              augments['mask'].to(torch.int64))
 
                 boxes = get_boxes_from_mask(mask_tensor)
-                point_coords, point_label = init_point_sampling(mask_tensor,
-                                                                self.point_num)
+                point_coords, point_label = init_point_sampling(
+                    mask_tensor,  self.point_num)
+                edge_point_coords = get_edge_points_from_mask(
+                    mask_val, original_mask, self.edge_point_num)
 
                 masks_list.append(mask_tensor)
                 boxes_list.append(boxes)
                 point_coords_list.append(point_coords)
                 point_labels_list.append(point_label)
+                edge_point_coords_list.append(edge_point_coords)
 
             mask = torch.stack(masks_list, dim=0)
             boxes = torch.stack(boxes_list, dim=0)
             point_coords = torch.stack(point_coords_list, dim=0)
             point_labels = torch.stack(point_labels_list, dim=0)
+            edges = torch.stack(edge_point_coords_list, dim=0)
 
             image_input["image"] = image_tensor.unsqueeze(0)
             image_input["label"] = mask.unsqueeze(1)
             image_input["boxes"] = boxes
             image_input["point_coords"] = point_coords
             image_input["point_labels"] = point_labels
+            image_input["edges"] = edges
             image_input["image_path"] = image_path
             image_input["pseudo"] = self.pseudos[index]
 
@@ -297,3 +313,12 @@ class TestingDatasetFolder(TestingDataset):
                 label_paths.append((val, label_path))
 
         return image_paths, label_paths
+
+
+# if __name__ == "__main__":
+#     dataset = TrainingDataset(
+#         split_paths="/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL3/split.json",
+#     )
+#     for i in range(len(dataset)):
+#         print("i = ", i)
+#         data = dataset[i]
