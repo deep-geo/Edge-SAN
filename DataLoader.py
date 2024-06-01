@@ -315,10 +315,39 @@ class TestingDatasetFolder(TestingDataset):
         return image_paths, label_paths
 
 
-# if __name__ == "__main__":
-#     dataset = TrainingDataset(
-#         split_paths="/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL3/split.json",
-#     )
-#     for i in range(len(dataset)):
-#         print("i = ", i)
-#         data = dataset[i]
+def find_overlapping_edges(label):
+    """
+    Find overlapping edges between clustered nuclei.
+
+    Args:
+        label (array): The binary label image.
+
+    Returns:
+        array: An array of points representing the overlapping edges.
+    """
+    # Find contours of the nuclei
+    contours, _ = cv2.findContours(label, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Create an empty mask to draw contours
+    contour_mask = np.zeros_like(label)
+
+    # Draw all contours on the mask
+    #cv2.drawContours(contour_mask, contours, -1, 255, thickness=cv2.FILLED)
+
+    # Use morphological operations to find overlaps
+    overlap_mask = cv2.erode(contour_mask, kernel=np.ones((3, 3), np.uint8), iterations=1)
+    overlap_mask = cv2.dilate(overlap_mask, kernel=np.ones((3, 3), np.uint8), iterations=1)
+
+    # Find contours of the overlapping regions
+    overlap_contours, _ = cv2.findContours(overlap_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Extract points from the overlapping contours
+    overlap_edges = []
+    for contour in overlap_contours:
+        if cv2.contourArea(contour) > 10:  # Filter small contours
+            start_point = contour[0][0]
+            end_point = contour[-1][0]
+            middle_point = contour[len(contour) // 2][0]
+            overlap_edges.append([start_point, middle_point, end_point])
+
+    return np.array(overlap_edges, dtype=np.float32)

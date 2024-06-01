@@ -15,7 +15,7 @@ python train.py \
 --sam_checkpoint "/root/autodl-tmp/sam_vit_b_01ec64.pth" \
 --device "cuda" \
 --lr 0.0001 \
---resume "" \
+--resume "/root/autodl-tmp/epoch0026_test-loss0.1573_sam.pth" \
 --model_type "vit_b" \
 --boxes_prompt \
 --point_num 1 \
