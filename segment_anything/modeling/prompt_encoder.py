@@ -59,6 +59,9 @@ class PromptEncoder(nn.Module):
         )
         self.no_mask_embed = nn.Embedding(1, embed_dim)
 
+        # Add cluster edge embeddings
+        self.cluster_edge_embed = nn.Embedding(1, embed_dim)
+
     def get_dense_pe(self) -> torch.Tensor:
         """
         Returns the positional encoding used to encode point prompts,
@@ -112,12 +115,19 @@ class PromptEncoder(nn.Module):
         """Embeds mask inputs."""
         mask_embedding = self.mask_downscaling(masks)
         return mask_embedding
+        
+    # New method to embed cluster edges
+    def _embed_cluster_edges(self, cluster_edges: torch.Tensor) -> torch.Tensor:
+        cluster_edge_embedding = self.pe_layer.forward_with_coords(cluster_edges, self.input_image_size)
+        cluster_edge_embedding += self.cluster_edge_embed.weight
+        return cluster_edge_embedding
 
     def _get_batch_size(
         self,
         points: Optional[Tuple[torch.Tensor, torch.Tensor]],
         boxes: Optional[torch.Tensor],
         masks: Optional[torch.Tensor],
+        cluster_edges: Optional[torch.Tensor] = None,  # Added parameter
     ) -> int:
         """
         Gets the batch size of the output given the batch size of the input prompts.
@@ -128,6 +138,8 @@ class PromptEncoder(nn.Module):
             return boxes.shape[0]
         elif masks is not None:
             return masks.shape[0]
+        elif cluster_edges is not None:  # Added condition
+            return cluster_edges.shape[0]
         else:
             return 1
 
@@ -139,6 +151,7 @@ class PromptEncoder(nn.Module):
         points: Optional[Tuple[torch.Tensor, torch.Tensor]],
         boxes: Optional[torch.Tensor],
         masks: Optional[torch.Tensor],
+        cluster_edges: Optional[torch.Tensor] = None,  # Added parameter
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Embeds different types of prompts, returning both sparse and dense
@@ -157,7 +170,8 @@ class PromptEncoder(nn.Module):
           torch.Tensor: dense embeddings for the masks, in the shape
             Bx(embed_dim)x(embed_H)x(embed_W)
         """
-        bs = self._get_batch_size(points, boxes, masks)
+       
+        bs = self._get_batch_size(points, boxes, masks, cluster_edges) # include cluster edge
         sparse_embeddings = torch.empty((bs, 0, self.embed_dim), device=self._get_device()) #B,0,256  空[]
 
         if points is not None:
@@ -168,6 +182,10 @@ class PromptEncoder(nn.Module):
         if boxes is not None:
             box_embeddings = self._embed_boxes(boxes)
             sparse_embeddings = torch.cat([sparse_embeddings, box_embeddings], dim=1)
+
+        if cluster_edges is not None:  # Embed cluster edges
+            cluster_edge_embeddings = self._embed_cluster_edges(cluster_edges)
+            sparse_embeddings = torch.cat([sparse_embeddings, cluster_edge_embeddings], dim=1)
 
         if masks is not None:
             dense_embeddings = self._embed_masks(masks)

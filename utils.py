@@ -132,8 +132,10 @@ def get_edge_points_from_mask(mask_val: int, mask: np.ndarray, point_num=3):
     #                    thickness=-1)
     #     cv2.imshow("img", img)
     #     cv2.waitKey(0)
+    #return torch.tensor(points, dtype=torch.float)
+    
+    return torch.tensor(np.array(points), dtype=torch.float)
 
-    return torch.tensor(points, dtype=torch.float)
 
 
 def select_random_points(pr, gt, point_num=9):
