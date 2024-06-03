@@ -113,8 +113,11 @@ def parse_inference_args():
     parser.add_argument("--work_dir", type=str, default="workdir")
     parser.add_argument("--run_name", type=str, default="run")
 
+    parser.add_argument("--random_seed", type=int, default=42)
+
     # model
-    parser.add_argument("--sam_checkpoint", type=str, help="checkpoint")
+    parser.add_argument("--sam_checkpoint", type=str, help="vanilla sam checkpoint")
+    parser.add_argument("--checkpoint", type=str, help="custom checkpoint")
 
     parser.add_argument("--model_type", type=str, default="vit_b",
                         help="sam model_type")

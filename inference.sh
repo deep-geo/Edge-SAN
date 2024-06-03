@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
 python inference.py \
---sam_checkpoint "<path-to-model-checkpoint>" \
+--random_seed 42 \
+--sam_checkpoint "<path-to-vanilla-sam-checkpoint>" \
+--checkpoint "<path-to-custom-checkpoint>" \
 --model_type "vit_b" \
 --device "cpu" \
 --image_size 256 \

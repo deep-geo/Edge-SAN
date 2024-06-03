@@ -4,6 +4,7 @@ import tqdm
 import numpy as np
 import datetime
 import wandb
+import random
 
 from arguments import parse_inference_args
 from segment_anything import sam_model_registry
@@ -127,9 +128,10 @@ def main(args):
     wandb.init(project="NucleiSAM_Inference", name=args.run_name)
 
     model = sam_model_registry[args.model_type](args).to(args.device)
-    with open(args.sam_checkpoint, "rb") as f:
-        checkpoint = torch.load(f, map_location=args.device)
-        model.load_state_dict(checkpoint['model'])
+    if args.checkpoint:
+        with open(args.checkpoint, "rb") as f:
+            checkpoint = torch.load(f, map_location=args.device)
+            model.load_state_dict(checkpoint['model'])
 
     dataset = TestingDatasetFolder(data_root=args.data_root,
                                    requires_name=True,
@@ -155,9 +157,20 @@ def main(args):
 if __name__ == '__main__':
     args = parse_inference_args()
     args.encoder_adapter = True
+
+    seed = args.random_seed
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
     # args.batch_size = 1
     # args.data_root = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/cpm15"
     # args.pred_iou_thresh = 0.8
     # args.stability_score_thresh = 0.9
     # args.sam_checkpoint = "epoch0077_test-loss0.1181_sam.pth"
+    # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
     main(args)
