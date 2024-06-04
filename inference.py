@@ -114,8 +114,6 @@ def inference(args, model, data_loader):
         for j in range(len(args.metrics)):
             metrics_data[args.metrics[j]].append(test_batch_metrics[j])
 
-        print("metrics_data: ", metrics_data)
-
     average_metrics = {key: np.mean(vals) for key, vals in metrics_data.items()}
     average_loss = np.mean(losses)
     average_miss_rate = np.mean(miss_rate)
@@ -173,4 +171,5 @@ if __name__ == '__main__':
     # args.stability_score_thresh = 0.9
     # args.sam_checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
     # args.checkpoint = "epoch0077_test-loss0.1181_sam.pth"
+
     main(args)
