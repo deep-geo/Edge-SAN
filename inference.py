@@ -114,7 +114,7 @@ def inference(args, model, data_loader):
         for j in range(len(args.metrics)):
             metrics_data[args.metrics[j]].append(test_batch_metrics[j])
 
-        # print("metrics_data: ", metrics_data)
+        print("metrics_data: ", metrics_data)
 
     average_metrics = {key: np.mean(vals) for key, vals in metrics_data.items()}
     average_loss = np.mean(losses)
@@ -131,7 +131,7 @@ def main(args):
     if args.checkpoint:
         with open(args.checkpoint, "rb") as f:
             checkpoint = torch.load(f, map_location=args.device)
-            model.load_state_dict(checkpoint['model'])
+            model.load_state_dict(checkpoint['model'], strict=False)
 
     dataset = TestingDatasetFolder(data_root=args.data_root,
                                    requires_name=True,
@@ -171,6 +171,6 @@ if __name__ == '__main__':
     # args.data_root = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/cpm15"
     # args.pred_iou_thresh = 0.8
     # args.stability_score_thresh = 0.9
-    # args.sam_checkpoint = "epoch0077_test-loss0.1181_sam.pth"
-    # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
+    # args.sam_checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
+    # args.checkpoint = "epoch0077_test-loss0.1181_sam.pth"
     main(args)
