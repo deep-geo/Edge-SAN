@@ -12,7 +12,7 @@ python train.py \
 --mask_num 5 \
 --split_paths "/root/autodl-tmp/ALL3/split.json" \
 --metrics 'iou' 'dice' 'precision' 'f1_score' 'recall' 'specificity' 'accuracy' 'aji' 'dq' 'sq' 'pq' \
---sam_checkpoint "/root/autodl-tmp/sam_vit_b_01ec64.pth" \
+--checkpoint "/root/autodl-tmp/sam_vit_b_01ec64.pth" \
 --device "cuda" \
 --lr 0.0001 \
 --resume "" \
@@ -22,10 +22,6 @@ python train.py \
 --iter_point 8 \
 --encoder_adapter \
 --multimask \
---pred_iou_thresh 0.88 \
---stability_score_thresh 0.95 \
---points_per_side 32 \
---points_per_batch 256 \
 #--prompt_path
 #--save_pred
 #--lr_scheduler \

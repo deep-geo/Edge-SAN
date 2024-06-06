@@ -1,8 +1,6 @@
 import argparse
 import datetime
 
-from metrics import metrics_need_pred_mask
-
 
 def parse_train_args():
     parser = argparse.ArgumentParser()
@@ -29,8 +27,6 @@ def parse_train_args():
                         help="image_size")
     parser.add_argument("--mask_num", type=int, default=5,
                         help="get mask number")
-    parser.add_argument("--predict_masks", action='store_true',
-                        help="predict masks or not")
 
     parser.add_argument("--split_paths", nargs='+', default=[],
                         help="path list of the split json files")
@@ -38,19 +34,10 @@ def parse_train_args():
         "--metrics",
         nargs='+',
         default=['iou', 'dice', 'precision', 'f1_score', 'recall',
-                 'specificity', 'accuracy', 'hausdorff_distance'],
+                 'specificity', 'accuracy', 'aji', "dq", "sq", "pq"],
         help="metrics"
     )
-    parser.add_argument("--pred_iou_thresh", type=float, default=0.88,
-                        help="Mask filtering threshold in [0,1]")
-    parser.add_argument("--stability_score_thresh", type=float, default=0.95,
-                        help="Mask filtering threshold in [0,1]")
-    parser.add_argument("--points_per_side", type=int, default=32,
-                        help="arg for mask generator")
-    parser.add_argument("--points_per_batch", type=int, default=256,
-                        help="arg for mask generator")
-
-    parser.add_argument('--device', type=str, default='cuda',
+    parser.add_argument('--device', type=str, default='cpu',
                         help="cuda or cpu")
     parser.add_argument("--lr", type=float, default=1e-4,
                         help="learning rate")
@@ -58,7 +45,7 @@ def parse_train_args():
                         help="checkpoint or run_name to resume")
     parser.add_argument("--model_type", type=str, default="vit_b",
                         help="sam model_type")
-    parser.add_argument("--sam_checkpoint", type=str, default=None,
+    parser.add_argument("--checkpoint", type=str, default=None,
                         help="sam checkpoint")
     parser.add_argument("--boxes_prompt", action='store_true',
                         help="use boxes prompt")
@@ -96,13 +83,8 @@ def parse_train_args():
     # parser.add_argument("--use_amp", type=bool, default=False, help="use amp")
 
     args = parser.parse_args()
-    if args.resume:
-        args.sam_checkpoint = None
 
-    if set(metrics_need_pred_mask) & set(args.metrics):
-        args.predict_masks = True
-        print(f"predict_masks is activated according to the metrics: "
-              f"{set(metrics_need_pred_mask) & set(args.metrics)}")
+    args.checkpoint = args.resume or args.checkpoint
 
     return args
 
@@ -168,10 +150,5 @@ def parse_inference_args():
                         help="save result")
 
     args = parser.parse_args()
-
-    if set(metrics_need_pred_mask) & set(args.metrics):
-        args.predict_masks = True
-        print(f"predict_masks is activated according to the metrics: "
-              f"{set(metrics_need_pred_mask) & set(args.metrics)}")
 
     return args

@@ -137,7 +137,6 @@ def get_edge_points_from_mask(mask_val: int, mask: np.ndarray, point_num=3):
     return torch.tensor(np.array(points), dtype=torch.float)
 
 
-
 def select_random_points(pr, gt, point_num=9):
     """
     Selects random points from the predicted and ground truth masks and

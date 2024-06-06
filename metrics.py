@@ -1,18 +1,13 @@
+import os
+import cv2
 import torch
 import numpy as np
-from scipy.spatial.distance import directed_hausdorff
 
-import os
-import numpy as np
-from PIL import Image
-from torchvision import transforms
+from typing import List
 from scipy.optimize import linear_sum_assignment
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-metrics_need_pred_mask = ["aji", "dq", "sq", "pq"]
 
 
 def _threshold(x, threshold=None):
@@ -36,65 +31,65 @@ def _list_tensor(x, y):
     return x, y
 
 
-def iou(pr, gt, eps=1e-7, threshold = 0.5):
-    pr_, gt_ = _list_tensor(pr, gt)
-    pr_ = _threshold(pr_, threshold=threshold)
-    gt_ = _threshold(gt_, threshold=threshold)
-    intersection = torch.sum(gt_ * pr_,dim=[1,2,3])
-    union = torch.sum(gt_,dim=[1,2,3]) + torch.sum(pr_,dim=[1,2,3]) - intersection
+def logits2instances(x, threshold: float = 0.5):
+    if type(x) is list:
+        x = torch.tensor(np.array(x))
+    if x.min() < 0 or x.max() > 1:
+        x = torch.nn.Sigmoid()(x)
+    return _threshold(x, threshold=threshold)
+
+
+def iou(pr, gt, eps=1e-7, threshold=0.5):
+    pr_ = logits2instances(pr, threshold)
+    intersection = torch.sum(gt * pr_, dim=[1, 2, 3])
+    union = torch.sum(gt, dim=[1, 2, 3]) + torch.sum(pr_, dim=[1, 2, 3]) - intersection
     return ((intersection + eps) / (union + eps)).cpu().numpy()
 
 
 def dice(pr, gt, eps=1e-7, threshold = 0.5):
-    pr_, gt_ = _list_tensor(pr, gt)
-    pr_ = _threshold(pr_, threshold=threshold)
-    gt_ = _threshold(gt_, threshold=threshold)
-    intersection = torch.sum(gt_ * pr_,dim=[1,2,3])
-    union = torch.sum(gt_,dim=[1,2,3]) + torch.sum(pr_,dim=[1,2,3])
-    return ((2. * intersection +eps) / (union + eps)).cpu().numpy()
+    pr_ = logits2instances(pr, threshold)
+    intersection = torch.sum(gt * pr_, dim=[1, 2, 3])
+    union = torch.sum(gt, dim=[1, 2, 3]) + torch.sum(pr_, dim=[1, 2, 3])
+    return ((2. * intersection + eps) / (union + eps)).cpu().numpy()
 
 
 def accuracy(pr, gt, threshold=0.5):
-    pr_, gt_ = _list_tensor(pr, gt)
-    pr_ = _threshold(pr_, threshold=threshold)
-    correct = (pr_ == gt_).float()
+    pr_ = logits2instances(pr, threshold)
+    correct = (pr_ == gt).float()
     return torch.mean(correct).cpu().numpy()
 
 
 def precision(pr, gt, eps=1e-7, threshold=0.5):
-    pr_, gt_ = _list_tensor(pr, gt)
-    pr_ = _threshold(pr_, threshold=threshold)
-    tp = torch.sum(gt_ * pr_)
+    pr_ = logits2instances(pr, threshold)
+    tp = torch.sum(gt * pr_)
     fp = torch.sum(pr_) - tp
     return (tp + eps) / (tp + fp + eps)
 
 
 def recall(pr, gt, eps=1e-7, threshold=0.5):
-    pr_, gt_ = _list_tensor(pr, gt)
-    pr_ = _threshold(pr_, threshold=threshold)
-    tp = torch.sum(gt_ * pr_)
-    fn = torch.sum(gt_) - tp
+    pr_ = logits2instances(pr, threshold)
+    tp = torch.sum(gt * pr_)
+    fn = torch.sum(gt) - tp
     return (tp + eps) / (tp + fn + eps)
 
 
 def f1_score(pr, gt, eps=1e-7, threshold=0.5):
     p = precision(pr, gt, eps, threshold)
     r = recall(pr, gt, eps, threshold)
-    #print(p,r)
     return (2 * p * r) / (p + r + eps)
 
 
 def specificity(pr, gt, eps=1e-7, threshold=0.5):
-    pr_, gt_ = _list_tensor(pr, gt)
-    pr_ = _threshold(pr_, threshold=threshold)
-    tn = torch.sum((1 - gt_) * (1 - pr_))
-    fp = torch.sum(pr_) - torch.sum(gt_ * pr_)
+    pr_ = logits2instances(pr, threshold)
+    tn = torch.sum((1 - gt) * (1 - pr_))
+    fp = torch.sum(pr_) - torch.sum(gt * pr_)
     return ((tn + eps) / (tn + fp + eps)).cpu().numpy()
 
 
 # Helper function to convert images to tensors
 def to_tensor(img):
     return torch.tensor(np.array(img), device=device)
+
 
 # Helper function to get instances from a mask
 def get_instances(mask):
@@ -107,9 +102,10 @@ def get_instances(mask):
         instances.append(instance)
     return instances
 
+
 # Average Jaccard Index (AJI)
 def aji(pred, gt, epsilon=1e-10):
-    pred_instances = get_instances(pred)
+    pred_instances = logits2instances(pred)
     gt_instances = get_instances(gt)
 
     intersection_sum = 0
@@ -128,10 +124,12 @@ def aji(pred, gt, epsilon=1e-10):
     aji_score = (intersection_sum + epsilon) / (union_sum + epsilon)
     return aji_score
 
+
 # Detection Quality (DQ)
-def dq(pred, gt, epsilon=1e-10):
-    pred_instances = get_instances(pred)
-    gt_instances = get_instances(gt)
+def dq(preds, gts, epsilon=1e-10, threshold=0.5):
+    preds = logits2instances(preds, threshold)
+    pred_instances = get_instances(preds)
+    gt_instances = get_instances(gts)
 
     intersection = torch.zeros((len(gt_instances), len(pred_instances)), device=device)
     union = torch.zeros((len(gt_instances), len(pred_instances)), device=device)
@@ -148,10 +146,12 @@ def dq(pred, gt, epsilon=1e-10):
     dq_score = len(gt_ind) / (len(gt_instances) + len(pred_instances) - len(gt_ind))
     return dq_score
 
+
 # Segmentation Quality (SQ)
-def sq(pred, gt, epsilon=1e-10):
-    pred_instances = get_instances(pred)
-    gt_instances = get_instances(gt)
+def sq(preds, gts, epsilon=1e-10, threshold=0.5):
+    preds = logits2instances(preds, threshold)
+    pred_instances = get_instances(preds)
+    gt_instances = get_instances(gts)
 
     intersection = torch.zeros((len(gt_instances), len(pred_instances)), device=device)
     union = torch.zeros((len(gt_instances), len(pred_instances)), device=device)
@@ -169,9 +169,9 @@ def sq(pred, gt, epsilon=1e-10):
     return sq_score
 
 # Panoptic Quality (PQ)
-def pq(pred, gt, epsilon=1e-10):
-    dq_score = dq(pred, gt, epsilon)
-    sq_score = sq(pred, gt, epsilon)
+def pq(preds, gts, epsilon=1e-10):
+    dq_score = dq(preds, gts, epsilon)
+    sq_score = sq(preds, gts, epsilon)
     pq_score = dq_score * sq_score
     return pq_score
 
@@ -195,7 +195,11 @@ def process_metrics(metric_list):
     return metric_array
 
 
-def SegMetrics(pred, pred_mask, label, metrics):
+def SegMetricsFunc(preds, gts, metrics):
+    """
+    preds & gts shape: B * C * H * W
+    gts values: bg 0, fg 1
+    """
     metric_list = []  
     if isinstance(metrics, str):
         metrics = [metrics, ]
@@ -203,33 +207,230 @@ def SegMetrics(pred, pred_mask, label, metrics):
         if not isinstance(metric, str):
             continue
         elif metric == 'iou':
-            metric_list.append(np.mean(iou(pred, label)))
+            metric_list.append(np.mean(iou(preds, gts)))
         elif metric == 'dice':
-            metric_list.append(np.mean(dice(pred, label)))
+            metric_list.append(np.mean(dice(preds, gts)))
         elif metric == 'precision':
-            metric_list.append(torch.mean(precision(pred, label)))
+            metric_list.append(torch.mean(precision(preds, gts)))
         elif metric == 'recall':
-            metric_list.append(torch.mean(recall(pred, label)))
+            metric_list.append(torch.mean(recall(preds, gts)))
         elif metric == 'accuracy':
-            metric_list.append(np.mean(accuracy(pred, label)))
+            metric_list.append(np.mean(accuracy(preds, gts)))
         elif metric == 'f1_score':
-            metric_list.append(torch.mean(f1_score(pred, label)))
+            metric_list.append(torch.mean(f1_score(preds, gts)))
         elif metric == 'specificity':
-            metric_list.append(np.mean(specificity(pred, label)))
+            metric_list.append(np.mean(specificity(preds, gts)))
         elif metric == 'aji':
-            metric_list.append(aji(pred_mask, label))
+            metric_list.append(aji(preds, gts))
         elif metric == 'dq':
-            metric_list.append(dq(pred_mask, label))
+            metric_list.append(dq(preds, gts))
         elif metric == 'sq':
-            metric_list.append(sq(pred_mask, label))
+            metric_list.append(sq(preds, gts))
         elif metric == 'pq':
-            metric_list.append(pq(pred_mask, label))
+            metric_list.append(pq(preds, gts))
         else:
             raise ValueError('metric %s not recognized' % metric)
-    if pred is not None:
+    if preds is not None:
         metric_list = process_metrics(metric_list)
         #print(f"metric_list:{metric_list}")
         metric = np.array(metric_list)
     else:
         raise ValueError('metric mistakes in calculations')
     return metric
+
+
+class SegMetrics:
+    """
+    metrics: metrics to calculate
+    preds: un-normalized predicted masks which is logits, shape: B * C * H * W
+    gts: ground truth masks, shape: B * C * H * W
+    threshold: probability to convert sigmoided prrdicts to masks.
+    """
+    def __init__(self, metrics: List[str], predicts: torch.Tensor,
+                 gts: torch.Tensor, threshold: float = 0.5):
+        self._metrics = metrics
+        self.threshold = threshold
+        self.pred_masks = self.get_predicted_masks(predicts)
+        self.gts = gts.type(torch.int32)
+        self.eps = 1e-10
+
+        # for b in range(self.pred_masks.shape[0]):
+        #     cv2.imshow("pred_mask", (self.pred_masks[b, 0, :, :] * 255).numpy().astype(np.uint8))
+        #     cv2.imshow("gt", (self.gts[b, 0, :, :] * 255).numpy().astype(np.uint8))
+        #     cv2.waitKey(0)
+
+    def result(self) -> dict:
+        result = {
+            metric: getattr(self, metric) if hasattr(self, metric) else None
+            for metric in self._metrics
+        }
+        if "aji" in self._metrics:
+            if "intersection" not in self._metrics:
+                result["intersection"] = self.intersection
+            if "union" not in self._metrics:
+                result["union"] = self.union
+
+        return result
+
+    def get_predicted_masks(self, predicts: torch.Tensor):
+        probs = torch.nn.Sigmoid()(predicts)
+        return (probs > self.threshold).type(torch.int32)
+
+    @property
+    def accuracy(self):
+        key = "_accuracy"
+        if not hasattr(self, key):
+            correct = self.pred_masks == self.gts
+            value = torch.mean(correct.type(torch.float32), dim=[1, 2, 3])
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def tp(self):
+        return self.intersection
+        # key = "_tp"
+        # if not hasattr(self, key):
+        #     value = torch.sum(self.gts * self.pred_masks, dim=[1, 2, 3])
+        #     setattr(self, key, value)
+        # return getattr(self, key)
+
+    @property
+    def fp(self):
+        key = "_fp"
+        if not hasattr(self, key):
+            value = torch.sum(self.pred_masks, dim=[1, 2, 3]) - self.tp
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def tn(self):
+        key = "_tn"
+        if not hasattr(self, key):
+            value = torch.sum((1 - self.gts) * (1 - self.pred_masks), dim=[1, 2, 3])
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def fn(self):
+        key = "_fn"
+        if not hasattr(self, key):
+            value = torch.sum(self.gts, dim=[1, 2, 3]) - self.tp
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def precision(self):
+        key = "_precision"
+        if not hasattr(self, key):
+            value = self.tp / (self.tp + self.fp + self.eps)
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def recall(self):
+        key = "_recall"
+        if not hasattr(self, key):
+            value = self.tp / (self.tp + self.fn + self.eps)
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def f1_score(self):
+        key = "_f1_score"
+        if not hasattr(self, key):
+            value = (2 * self.precision * self.recall) / (self.precision + self.recall + self.eps)
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def specificity(self):
+        key = "_specificity"
+        if not hasattr(self, key):
+            value = self.tn / (self.tn + self.fp + self.eps)
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def intersection(self):
+        key = "_intersection"
+        if not hasattr(self, key):
+            value = torch.sum(self.gts & self.pred_masks, dim=[1, 2, 3])
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def union(self):
+        key = "_union"
+        if not hasattr(self, key):
+            value = torch.sum(self.gts | self.pred_masks, dim=[1, 2, 3])
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def iou(self):
+        key = "_iou"
+        if not hasattr(self, key):
+            value = self.intersection / (self.union + self.eps)
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def dice(self):
+        key = "_dice"
+        if not hasattr(self, key):
+            gt_areas = torch.sum(self.gts, dim=[1, 2, 3])
+            predict_areas = torch.sum(self.pred_masks, dim=[1, 2, 3])
+            value = 2 * self.intersection / (gt_areas + predict_areas + self.eps)
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def dq(self):
+        key = "_dq"
+        if not hasattr(self, key):
+            value = self.tp / (self.tp + (self.fp + self.fn) / 2 + self.eps)
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def sq(self):
+        key = "_sq"
+        if not hasattr(self, key):
+            value = self.iou / self.tp
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
+    def pq(self):
+        key = "_pq"
+        if not hasattr(self, key):
+            value = self.dq * self.sq
+            setattr(self, key, value)
+        return getattr(self, key)
+
+
+class AggregatedMetrics:
+
+    def __init__(self, metrics: List[str], metric_data: List[dict]):
+        self.metrics = metrics
+        self.metric_data = metric_data
+
+    def aggregate(self):
+        # average
+        result = {
+            metric: self.average(metric) for metric in self.metrics
+            if metric in self.metric_data[0].keys() and self.metric_data[0][metric] is not None
+        }
+        # aji - Aggregated Jaccard Index
+        if "aji" in self.metrics:
+            result["aji"] = self.sum("intersection") / self.sum("union")
+
+        return result
+
+    def average(self, metric: str):
+        arr = torch.cat([_[metric] for _ in self.metric_data]).cpu().numpy()
+        return np.mean(arr)
+
+    def sum(self, metric: str):
+        arr = torch.cat([_[metric] for _ in self.metric_data]).cpu().numpy()
+        return np.sum(arr)

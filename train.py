@@ -3,8 +3,6 @@ import re
 import random
 import datetime
 import glob
-
-import cv2
 import numpy as np
 import torch
 import wandb
@@ -17,7 +15,7 @@ from utils import get_logger, generate_point, setting_prompt_none, save_masks, \
     postprocess_masks, to_device, prompt_and_decoder, MaskPredictor
 from loss import FocalDiceloss_IoULoss
 from arguments import parse_train_args
-from metrics import SegMetrics
+from metrics import SegMetrics, AggregatedMetrics
 from tqdm import tqdm
 from pseudo import PseudoSchedular, generate_pseudo
 
@@ -27,26 +25,17 @@ max_num_chkpt = 3
 
 @torch.no_grad()
 def eval_model(args, model, test_loader):
-    criterion = FocalDiceloss_IoULoss()
     model.eval()
-    if args.predict_masks:
-        mask_predictor = MaskPredictor(
-            model=model,
-            pred_iou_thresh=args.pred_iou_thresh,
-            stability_score_thresh=args.stability_score_thresh,
-            points_per_side=args.points_per_side,
-            points_per_batch=args.points_per_batch
-        )
-    else:
-        mask_predictor = None
+
+    criterion = FocalDiceloss_IoULoss()
+
     test_loss = []
-    miss_rate = []
-    test_iter_metrics = [0] * len(args.metrics)
-    test_metrics = {}
     prompt_dict = {}
-    test_pbar = tqdm(test_loader)
-    l = len(test_loader)
-    for i, batched_input in enumerate(test_pbar):
+    all_eval_metrics = []
+
+    for i, batched_input in enumerate(tqdm(test_loader)):
+        # if i > 2:
+        #     break
         batched_input = to_device(batched_input, args.device)
         ori_labels = batched_input["ori_label"]
         batch_original_size = batched_input["original_size"]
@@ -78,8 +67,6 @@ def eval_model(args, model, test_loader):
             point_coords, point_labels = [batched_input["point_coords"]], [
                 batched_input["point_labels"]]
 
-            
-
             for iter in range(args.iter_point):
                 masks, low_res_masks, iou_predictions = prompt_and_decoder(
                     args, batched_input, model, image_embeddings)
@@ -96,13 +83,7 @@ def eval_model(args, model, test_loader):
             points_show = (torch.concat(point_coords, dim=1),
                            torch.concat(point_labels, dim=1))
 
-        masks, pad = postprocess_masks(low_res_masks, args.image_size,
-                                       original_size)
-
-        miss_rate.append(
-            ((torch.sum(low_res_masks, dim=(2, 3)) == 0).sum() /
-            low_res_masks.shape[0]).item()
-        )
+        masks, pad = postprocess_masks(low_res_masks, args.image_size, original_size)
 
         if args.save_pred:
             save_masks(masks, save_path, img_name, args.image_size,
@@ -112,37 +93,33 @@ def eval_model(args, model, test_loader):
         loss = criterion(masks, ori_labels, iou_predictions)
         test_loss.append(loss.item())
 
-        # generate predict masks
-        pred_masks = None
-        if args.predict_masks:
-            image_paths = batched_input["image_path"]
-            pred_masks = mask_predictor.batch_predict(image_paths)
-            pred_masks = torch.tensor(np.array(pred_masks, dtype=np.int32)).unsqueeze(1).to(args.device)
+        seg_metrics = SegMetrics(args.metrics, masks, labels)
+        all_eval_metrics.append(seg_metrics.result())
 
-        test_batch_metrics = SegMetrics(masks, pred_masks, ori_labels, args.metrics)
-        test_batch_metrics = [round(metric, 4) for metric in test_batch_metrics]
+        # print("\neval seg_metrics: ", seg_metrics.result())
 
-        for j in range(len(args.metrics)):
-            test_iter_metrics[j] += test_batch_metrics[j]
-
-    test_iter_metrics = [metric / l for metric in test_iter_metrics]
+    aggregated_metrics = AggregatedMetrics(args.metrics, all_eval_metrics).aggregate()
     average_loss = np.mean(test_loss)
-    average_miss_rate = np.mean(miss_rate)
 
-    return average_loss, test_iter_metrics, average_miss_rate
+    print("\naggregated eval metrics: ", aggregated_metrics)
+
+    return average_loss, aggregated_metrics
 
 
 def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                     pseudo_schedular):
-    train_loader = tqdm(train_loader)
+    train_loader_bar = tqdm(train_loader)
     train_losses = []
-    train_iter_metrics = [0] * len(args.metrics)
 
     pseudo_weights = None
-    pred_masks = None
 
-    for batch, batched_input in enumerate(train_loader):
+    # all_train_metrics = []
 
+    # nn = 0
+    for batch, batched_input in enumerate(train_loader_bar):
+        # nn += 1
+        # if nn > 2:
+        #     break
         batched_input = stack_dict_batched(batched_input)
         batched_input = to_device(batched_input, args.device)
 
@@ -186,27 +163,6 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         optimizer.step()
         optimizer.zero_grad()
 
-        # generate predict masks
-        if args.predict_masks:
-            mask_predictor = MaskPredictor(
-                model=model,
-                pred_iou_thresh=args.pred_iou_thresh,
-                stability_score_thresh=args.stability_score_thresh,
-                points_per_side=args.points_per_side,
-                points_per_batch=args.points_per_batch
-
-            )
-            image_paths = batched_input["image_path"]
-            pred_masks = mask_predictor.batch_predict(image_paths)
-            pred_masks = [m for m in pred_masks for _ in range(args.mask_num)]
-            pred_masks = torch.tensor(np.array(pred_masks, dtype=np.int32)).unsqueeze(1).to(args.device)
-
-        if int(batch + 1) % 50 == 0:
-            print(
-                f'Epoch: {epoch + 1}, Batch: {batch + 1}, '
-                f'first {flag} prompt: {SegMetrics(masks, pred_masks, labels, args.metrics)}'
-            )
-
         point_num = random.choice(args.point_list)
         batched_input = generate_point(masks, labels, low_res_masks,
                                        batched_input, point_num)
@@ -239,16 +195,6 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                                                batched_input, point_num)
                 batched_input = to_device(batched_input, args.device)
 
-            if int(batch + 1) % 50 == 0:
-                if iter == init_mask_num or iter == args.iter_point - 1:
-                    print(
-                        f'Epoch: {epoch + 1}, Batch: {batch + 1}, '
-                        f'mask prompt: {SegMetrics(masks, pred_masks, labels, args.metrics)}')
-                else:
-                    print(
-                        f'Epoch: {epoch + 1}, Batch: {batch + 1}, '
-                        f'point {point_num} prompt: {SegMetrics(masks, pred_masks, labels, args.metrics)}')
-
         if int(batch + 1) % 200 == 0:
             print(
                 f"epoch:{epoch + 1}, iteration:{batch + 1}, loss:{loss.item()}")
@@ -259,18 +205,19 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
         train_losses.append(loss.item())
 
-        train_loader.set_postfix(train_loss=loss.item())
+        train_loader_bar.set_postfix(train_loss=loss.item())
 
-        train_batch_metrics = SegMetrics(masks, pred_masks, labels, args.metrics)
-        train_iter_metrics = [train_iter_metrics[i] + train_batch_metrics[i]
-                              for i in range(len(args.metrics))]
+        # seg_metrics = SegMetrics(args.metrics, masks, labels)
+        # all_train_metrics.append(seg_metrics.result())
+        # print("\ntrain seg_metrics: ", seg_metrics.result())
 
-    return train_losses, train_iter_metrics
+    # train_metrics = AggregatedMetrics(args.metrics, all_train_metrics).aggregate()
+    # print("\naggregated train_metrics: ", train_metrics)
+
+    return train_losses
 
 
 def main(args):
-
-    metric_names = args.metrics
 
     model = sam_model_registry[args.model_type](args).to(args.device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -310,7 +257,7 @@ def main(args):
             resume_epoch = checkpoint["epoch"]
 
     params = ["seed", "epochs", "batch_size", "image_size", "mask_num", "lr",
-              "resume", "model_type", "sam_checkpoint", "boxes_prompt",
+              "resume", "model_type", "checkpoint", "boxes_prompt",
               "point_num", "iter_point", "lr_scheduler", "point_list",
               "multimask", "encoder_adapter"]
     config = {p: getattr(args, p) for p in params}
@@ -382,22 +329,20 @@ def main(args):
     )
 
     best_loss = 1e10
-    l = len(train_loader)
-    
-    
-    semantic_seg_metric_names = ['dice', 'iou','precision', 'f1_score', 'recall', 'specificity','accuracy']
+
+    semantic_seg_metric_names = ['dice', 'iou','precision', 'f1_score',
+                                 'recall', 'specificity','accuracy']
     instance_seg_metric_names = ['aji', 'dq', 'sq', 'pq']
     
-
     for epoch in range(resume_epoch, args.epochs):
         print(f"\nTrain epoch {epoch}...")
+
+        model.train()
 
         if pseudo_schedular is not None:
             pseudo_schedular.step()
 
-        model.train()
-
-        train_losses, train_iter_metrics = train_one_epoch(
+        train_losses = train_one_epoch(
             args, model, optimizer, train_loader, epoch, criterion,
             pseudo_schedular
         )
@@ -405,31 +350,31 @@ def main(args):
         if args.lr_scheduler is not None:
             scheduler.step()
 
-        train_iter_metrics = [metric / l for metric in train_iter_metrics]
-
-        average_loss = np.mean(train_losses)
+        average_train_loss = np.mean(train_losses)
 
         print("\nEvaluate model...")
-        average_test_loss, test_iter_metrics, miss_rate = (
-            eval_model(args, model, test_loader))
+        average_test_loss, test_metrics = (eval_model(args, model, test_loader))
 
-        wandb.log({"Loss/train": average_loss, "Loss/test": average_test_loss})
-        wandb.log({"Loss/miss_rate": miss_rate})
- 
+        wandb.log(
+            {"Loss/train": average_train_loss, "Loss/test": average_test_loss},
+            step=epoch
+        )
+
         metrics_dict = {}
-        for name, value in zip(metric_names, test_iter_metrics):
-            if name in semantic_seg_metric_names:
-                metrics_dict[f'SemanticSeg/{name}'] = value
-            elif name in instance_seg_metric_names:
-                metrics_dict[f'InstanceSeg/{name}'] = value
-        #metrics_dict = dict(zip(metric_names, test_iter_metrics))
-        wandb.log(metrics_dict)
+        for metric in args.metrics:
+            if metric in semantic_seg_metric_names:
+                metrics_dict[f'SemanticSeg/{metric}'] = test_metrics.get(metric, None)
+            elif metric in instance_seg_metric_names:
+                metrics_dict[f'InstanceSeg/{metric}'] = test_metrics.get(metric, None)
+
+        wandb.log(metrics_dict, step=epoch)
 
         lr = scheduler.get_last_lr()[
             0] if args.lr_scheduler is not None else args.lr
         loggers.info(
-            f"epoch: {epoch + 1}, lr: {lr}, train-loss: {average_loss:.4f}, "
-            f"test-loss: {average_test_loss:.4f}, metrics: {metrics_dict}")
+            f"epoch: {epoch + 1}, lr: {lr}, train-loss: {average_train_loss:.4f}, "
+            f"test-loss: {average_test_loss:.4f}, metrics: {metrics_dict}"
+        )
 
         if average_test_loss < best_loss:
             # clean redundant checkpoints
@@ -449,12 +394,12 @@ def main(args):
             )
             state = {'model': model.float().state_dict(),
                      'optimizer': optimizer,
-                     'train-loss': average_loss, 'test-loss': average_test_loss,
+                     'train-loss': average_train_loss, 'test-loss': average_test_loss,
                      'epoch': epoch + 1}
             torch.save(state, save_path)
 
         if args.activate_unsupervised:
-            wandb.log({"pseudo_weight": pseudo_schedular.pseudo_weight})
+            wandb.log({"pseudo_weight": pseudo_schedular.pseudo_weight}, step=epoch)
             if pseudo_schedular.is_active():
                 pseudo_root = os.path.join(run_dir, "pseudo")
                 generate_pseudo(args, model, pseudo_root)
@@ -476,5 +421,7 @@ def main(args):
 if __name__ == '__main__':
     args = parse_train_args()
     args.encoder_adapter = True
-    # args.activate_unsupervised = True
+    # # args.activate_unsupervised = True
+    # args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
+    # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
     main(args)
