@@ -9,6 +9,8 @@ from scipy.optimize import linear_sum_assignment
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+epsilon = 1e-10
+
 
 def _threshold(x, threshold=None):
     if threshold is not None:
@@ -252,7 +254,6 @@ class SegMetrics:
         self.threshold = threshold
         self.pred_masks = self.get_predicted_masks(predicts)
         self.gts = gts.type(torch.int32)
-        self.eps = 1e-10
 
         # for b in range(self.pred_masks.shape[0]):
         #     cv2.imshow("pred_mask", (self.pred_masks[b, 0, :, :] * 255).numpy().astype(np.uint8))
@@ -322,7 +323,7 @@ class SegMetrics:
     def precision(self):
         key = "_precision"
         if not hasattr(self, key):
-            value = self.tp / (self.tp + self.fp + self.eps)
+            value = self.tp / (self.tp + self.fp + epsilon)
             setattr(self, key, value)
         return getattr(self, key)
 
@@ -330,7 +331,7 @@ class SegMetrics:
     def recall(self):
         key = "_recall"
         if not hasattr(self, key):
-            value = self.tp / (self.tp + self.fn + self.eps)
+            value = self.tp / (self.tp + self.fn +epsilon)
             setattr(self, key, value)
         return getattr(self, key)
 
@@ -338,7 +339,7 @@ class SegMetrics:
     def f1_score(self):
         key = "_f1_score"
         if not hasattr(self, key):
-            value = (2 * self.precision * self.recall) / (self.precision + self.recall + self.eps)
+            value = (2 * self.precision * self.recall) / (self.precision + self.recall + epsilon)
             setattr(self, key, value)
         return getattr(self, key)
 
@@ -346,7 +347,7 @@ class SegMetrics:
     def specificity(self):
         key = "_specificity"
         if not hasattr(self, key):
-            value = self.tn / (self.tn + self.fp + self.eps)
+            value = self.tn / (self.tn + self.fp + epsilon)
             setattr(self, key, value)
         return getattr(self, key)
 
@@ -370,7 +371,7 @@ class SegMetrics:
     def iou(self):
         key = "_iou"
         if not hasattr(self, key):
-            value = self.intersection / (self.union + self.eps)
+            value = self.intersection / (self.union + epsilon)
             setattr(self, key, value)
         return getattr(self, key)
 
@@ -380,7 +381,7 @@ class SegMetrics:
         if not hasattr(self, key):
             gt_areas = torch.sum(self.gts, dim=[1, 2, 3])
             predict_areas = torch.sum(self.pred_masks, dim=[1, 2, 3])
-            value = 2 * self.intersection / (gt_areas + predict_areas + self.eps)
+            value = 2 * self.intersection / (gt_areas + predict_areas + epsilon)
             setattr(self, key, value)
         return getattr(self, key)
 
@@ -388,7 +389,7 @@ class SegMetrics:
     def dq(self):
         key = "_dq"
         if not hasattr(self, key):
-            value = self.tp / (self.tp + (self.fp + self.fn) / 2 + self.eps)
+            value = self.tp / (self.tp + (self.fp + self.fn) / 2 + epsilon)
             setattr(self, key, value)
         return getattr(self, key)
 
@@ -396,7 +397,7 @@ class SegMetrics:
     def sq(self):
         key = "_sq"
         if not hasattr(self, key):
-            value = self.iou / self.tp
+            value = self.iou / (self.tp + epsilon)
             setattr(self, key, value)
         return getattr(self, key)
 
@@ -423,7 +424,7 @@ class AggregatedMetrics:
         }
         # aji - Aggregated Jaccard Index
         if "aji" in self.metrics:
-            result["aji"] = self.sum("intersection") / self.sum("union")
+            result["aji"] = self.sum("intersection") / (self.sum("union") + epsilon)
 
         return result
 
