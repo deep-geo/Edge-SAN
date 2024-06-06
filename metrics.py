@@ -275,6 +275,9 @@ class SegMetrics:
             if "union" not in self._metrics:
                 result["union"] = self.union
 
+        for metric in ["tp", "fp", "tn", "fn"]:
+            result[metric] = getattr(self, metric)
+
         return result
 
     def get_predicted_masks(self, predicts: torch.Tensor):
@@ -315,10 +318,18 @@ class SegMetrics:
         return 1 - self.tn
 
     @property
+    def precision(self):
+        key = "_precision"
+        if not hasattr(self, key):
+            value = self.intersection / (torch.sum(self.pred_masks, dim=[1, 2, 3]) + epsilon)
+            setattr(self, key, value)
+        return getattr(self, key)
+
+    @property
     def recall(self):
         key = "_recall"
         if not hasattr(self, key):
-            value = self.tp / (self.tp + self.fn +epsilon)
+            value = self.tp / (self.tp + self.fn + epsilon)
             setattr(self, key, value)
         return getattr(self, key)
 
@@ -407,6 +418,9 @@ class AggregatedMetrics:
         # average
         result = {}
         for metric in self.metrics:
+            if self.metric_data[0].get(metric, None) is None:
+                result[metric] = None
+                continue
             if metric != "aji" and metric not in instance_metrics:
                 result[metric] = self.average(metric)
 
