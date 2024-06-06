@@ -11,6 +11,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 epsilon = 1e-10
 
+instance_metrics = ["dq", "sq", "pq"]
+
 
 def _threshold(x, threshold=None):
     if threshold is not None:
@@ -249,9 +251,11 @@ class SegMetrics:
     threshold: probability to convert sigmoided prrdicts to masks.
     """
     def __init__(self, metrics: List[str], predicts: torch.Tensor,
-                 gts: torch.Tensor, threshold: float = 0.5):
+                 gts: torch.Tensor, prob_threshold: float = 0.5,
+                 iou_threshold: float = 0.5):
         self._metrics = metrics
-        self.threshold = threshold
+        self.prob_threshold = prob_threshold
+        self.iou_threshold = iou_threshold
         self.pred_masks = self.get_predicted_masks(predicts)
         self.gts = gts.type(torch.int32)
 
@@ -275,7 +279,7 @@ class SegMetrics:
 
     def get_predicted_masks(self, predicts: torch.Tensor):
         probs = torch.nn.Sigmoid()(predicts)
-        return (probs > self.threshold).type(torch.int32)
+        return (probs > self.prob_threshold).type(torch.int32)
 
     @property
     def accuracy(self):
@@ -288,44 +292,27 @@ class SegMetrics:
 
     @property
     def tp(self):
-        return self.intersection
-        # key = "_tp"
-        # if not hasattr(self, key):
-        #     value = torch.sum(self.gts * self.pred_masks, dim=[1, 2, 3])
-        #     setattr(self, key, value)
-        # return getattr(self, key)
+        key = "_tp"
+        if not hasattr(self, key):
+            value = (self.iou > self.iou_threshold).type(torch.int32)
+            setattr(self, key, value)
+        return getattr(self, key)
 
     @property
     def fp(self):
-        key = "_fp"
-        if not hasattr(self, key):
-            value = torch.sum(self.pred_masks, dim=[1, 2, 3]) - self.tp
-            setattr(self, key, value)
-        return getattr(self, key)
+        return 1 - self.tp
 
     @property
     def tn(self):
         key = "_tn"
         if not hasattr(self, key):
-            value = torch.sum((1 - self.gts) * (1 - self.pred_masks), dim=[1, 2, 3])
+            value = (self.union == 0).type(torch.int32)
             setattr(self, key, value)
         return getattr(self, key)
 
     @property
     def fn(self):
-        key = "_fn"
-        if not hasattr(self, key):
-            value = torch.sum(self.gts, dim=[1, 2, 3]) - self.tp
-            setattr(self, key, value)
-        return getattr(self, key)
-
-    @property
-    def precision(self):
-        key = "_precision"
-        if not hasattr(self, key):
-            value = self.tp / (self.tp + self.fp + epsilon)
-            setattr(self, key, value)
-        return getattr(self, key)
+        return 1 - self.tn
 
     @property
     def recall(self):
@@ -418,13 +405,28 @@ class AggregatedMetrics:
 
     def aggregate(self):
         # average
-        result = {
-            metric: self.average(metric) for metric in self.metrics
-            if metric in self.metric_data[0].keys() and self.metric_data[0][metric] is not None
-        }
+        result = {}
+        for metric in self.metrics:
+            if metric != "aji" and metric not in instance_metrics:
+                result[metric] = self.average(metric)
+
         # aji - Aggregated Jaccard Index
         if "aji" in self.metrics:
             result["aji"] = self.sum("intersection") / (self.sum("union") + epsilon)
+
+        # dq
+        count_tp = self.sum("tp")
+        count_fp = self.sum("fp")
+        count_fn = self.sum("fn")
+        result["dq"] = count_tp / (count_tp + (count_fp + count_fn) / 2)
+
+        # sq
+        iou_arr = torch.cat([_["iou"] for _ in self.metric_data]).cpu().numpy()
+        tp_arr = torch.cat([_["tp"] for _ in self.metric_data]).cpu().numpy()
+        result["sq"] = np.sum(iou_arr * tp_arr) / np.sum(tp_arr)
+
+        # pq
+        result["pq"] = result["dq"] * result["sq"]
 
         return result
 
