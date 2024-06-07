@@ -2,14 +2,13 @@ import os
 import cv2
 import torch
 import numpy as np
-
 from typing import List
 from scipy.optimize import linear_sum_assignment
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-epsilon = 1e-10
+epsilon = 1e-7
 
 instance_metrics = ["dq", "sq", "pq"]
 
@@ -50,7 +49,7 @@ def iou(pr, gt, eps=1e-7, threshold=0.5):
     return ((intersection + eps) / (union + eps)).cpu().numpy()
 
 
-def dice(pr, gt, eps=1e-7, threshold = 0.5):
+def dice(pr, gt, eps=1e-7, threshold=0.5):
     pr_ = logits2instances(pr, threshold)
     intersection = torch.sum(gt * pr_, dim=[1, 2, 3])
     union = torch.sum(gt, dim=[1, 2, 3]) + torch.sum(pr_, dim=[1, 2, 3])
@@ -172,6 +171,7 @@ def sq(preds, gts, epsilon=1e-10, threshold=0.5):
     sq_score = iou[gt_ind, pred_ind].mean().item()
     return sq_score
 
+
 # Panoptic Quality (PQ)
 def pq(preds, gts, epsilon=1e-10):
     dq_score = dq(preds, gts, epsilon)
@@ -193,7 +193,7 @@ def process_metrics(metric_list):
                 item = np.nan  # Using NaN to represent infinite values
         # Append processed item to the new list
         processed_list.append(item)
-    
+
     # Convert list to numpy array for further processing
     metric_array = np.array(processed_list)
     return metric_array
@@ -204,7 +204,7 @@ def SegMetricsFunc(preds, gts, metrics):
     preds & gts shape: B * C * H * W
     gts values: bg 0, fg 1
     """
-    metric_list = []  
+    metric_list = []
     if isinstance(metrics, str):
         metrics = [metrics, ]
     for i, metric in enumerate(metrics):
@@ -236,7 +236,7 @@ def SegMetricsFunc(preds, gts, metrics):
             raise ValueError('metric %s not recognized' % metric)
     if preds is not None:
         metric_list = process_metrics(metric_list)
-        #print(f"metric_list:{metric_list}")
+        # print(f"metric_list:{metric_list}")
         metric = np.array(metric_list)
     else:
         raise ValueError('metric mistakes in calculations')
@@ -248,8 +248,9 @@ class SegMetrics:
     metrics: metrics to calculate
     preds: un-normalized predicted masks which is logits, shape: B * C * H * W
     gts: ground truth masks, shape: B * C * H * W
-    threshold: probability to convert sigmoided prrdicts to masks.
+    threshold: probability to convert sigmoided predicts to masks.
     """
+
     def __init__(self, metrics: List[str], predicts: torch.Tensor,
                  gts: torch.Tensor, prob_threshold: float = 0.5,
                  iou_threshold: float = 0.5):
@@ -259,29 +260,24 @@ class SegMetrics:
         self.pred_masks = self.get_predicted_masks(predicts)
         self.gts = gts.type(torch.int32)
 
-        # for b in range(self.pred_masks.shape[0]):
-        #     cv2.imshow("pred_mask", (self.pred_masks[b, 0, :, :] * 255).numpy().astype(np.uint8))
-        #     cv2.imshow("gt", (self.gts[b, 0, :, :] * 255).numpy().astype(np.uint8))
-        #     cv2.waitKey(0)
-
     def result(self) -> dict:
         result = {
-            metric: getattr(self, metric) if hasattr(self, metric) else None
+            metric: getattr(self, metric).item() if hasattr(self, metric) else None
             for metric in self._metrics
         }
         if "aji" in self._metrics:
             if "intersection" not in self._metrics:
                 result["intersection"] = self.intersection
             if "union" not in self._metrics:
-                result["union"] = self.union
+                result["union"] = self.union.item()
 
         for metric in ["tp", "fp", "tn", "fn"]:
-            result[metric] = getattr(self, metric)
+            result[metric] = getattr(self, metric).item()
 
         return result
 
     def get_predicted_masks(self, predicts: torch.Tensor):
-        probs = torch.nn.Sigmoid()(predicts)
+        probs = torch.sigmoid(predicts)
         return (probs > self.prob_threshold).type(torch.int32)
 
     @property
@@ -303,25 +299,33 @@ class SegMetrics:
 
     @property
     def fp(self):
-        return 1 - self.tp
+        key = "_fp"
+        if not hasattr(self, key):
+            value = ((self.iou <= self.iou_threshold) & (self.pred_masks.sum(dim=[1, 2, 3]) > 0)).type(torch.int32)
+            setattr(self, key, value)
+        return getattr(self, key)
 
     @property
     def tn(self):
         key = "_tn"
         if not hasattr(self, key):
-            value = (self.union == 0).type(torch.int32)
+            value = ((self.gts.sum(dim=[1, 2, 3]) == 0) & (self.pred_masks.sum(dim=[1, 2, 3]) == 0)).type(torch.int32)
             setattr(self, key, value)
         return getattr(self, key)
 
     @property
     def fn(self):
-        return 1 - self.tn
+        key = "_fn"
+        if not hasattr(self, key):
+            value = ((self.pred_masks.sum(dim=[1, 2, 3]) == 0) & (self.gts.sum(dim=[1, 2, 3]) > 0)).type(torch.int32)
+            setattr(self, key, value)
+        return getattr(self, key)
 
     @property
     def precision(self):
         key = "_precision"
         if not hasattr(self, key):
-            value = self.intersection / (torch.sum(self.pred_masks, dim=[1, 2, 3]) + epsilon)
+            value = self.intersection / (self.pred_masks.sum(dim=[1, 2, 3]) + epsilon)
             setattr(self, key, value)
         return getattr(self, key)
 
