@@ -84,7 +84,7 @@ def main(args):
 
     criterion = FocalDiceloss_IoULoss()
     test_dataset = TestingDatasetFolder(
-        data_root=args.data_paths,
+        data_root=args.data_root,
         requires_name=True,
         point_num=args.point_num
     )
