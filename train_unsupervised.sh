@@ -7,10 +7,12 @@ python train.py \
 --epochs 100000 \
 --batch_size 8 \
 --num_workers 8 \
+--test_sample_rate 1.0 \
 --image_size 256 \
 --mask_num 5 \
---split_paths "/root/autodl-tmp/datasets/SAM_nuclei_preprocessed/ALL/split.json" \
+--split_paths "/root/autodl-tmp/ALL3/split.json" \
 --metrics 'iou' 'dice' 'precision' 'f1_score' 'recall' 'specificity' 'accuracy' 'aji' 'dq' 'sq' 'pq' \
+--checkpoint "/root/autodl-tmp/sam_vit_b_01ec64.pth" \
 --device "cuda" \
 --lr 0.0001 \
 --resume "" \
