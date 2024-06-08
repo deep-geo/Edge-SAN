@@ -112,6 +112,22 @@ def parse_train_args():
     parser.add_argument(
         "--unsupervised_weight_gr", type=float, default=0.1
     )
+    parser.add_argument(
+        "--pred_iou_thresh", type=float, default=0.88,
+        help="Mask filtering threshold in [0,1]"
+    )
+    parser.add_argument(
+        "--stability_score_thresh", type=float, default=0.95,
+        help="Mask filtering threshold in [0,1]"
+    )
+    parser.add_argument(
+        "--points_per_side", type=int, default=32,
+        help="Mask filtering threshold in [0,1]"
+    )
+    parser.add_argument(
+        "--points_per_batch", type=int, default=256,
+        help="Mask filtering threshold in [0,1]"
+    )
 
     # parser.add_argument("--use_amp", type=bool, default=False, help="use amp")
 
