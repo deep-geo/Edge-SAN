@@ -217,7 +217,10 @@ def parse_test_args():
         "--data_root", type=str, help="root directory of the train set"
     )
     parser.add_argument(
-        "--batch_size", type=int, default=1, help="batch size"
+        "--num_workers", type=int, default=8, help="dataloader num_workers"
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=8, help="batch size"
     )
     parser.add_argument(
         "--image_size", type=int, default=256, help="image_size"
