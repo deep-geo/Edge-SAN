@@ -87,11 +87,11 @@ def generate_pseudo(args, model, pseudo_root: str):
     model.eval()
     mask_predictor = MaskPredictor(
         model=model,
-        pred_iou_thresh=args.unsupervised_pred_iou_thresh,
-        stability_score_thresh=args.unsupervised_stability_score_thresh,
+        pred_iou_thresh=args.pred_iou_thresh,
+        stability_score_thresh=args.stability_score_thresh,
         min_mask_region_area=10,
-        points_per_side=28,
-        points_per_batch=256
+        points_per_side=args.points_per_side,
+        points_per_batch=args.points_per_batch
     )
     pseudo_data_dir = os.path.join(pseudo_root, "data")
     pseudo_label_dir = os.path.join(pseudo_root, "label")
