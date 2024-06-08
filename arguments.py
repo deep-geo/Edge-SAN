@@ -15,7 +15,7 @@ def parse_train_args():
         help="run model name"
     )
     parser.add_argument(
-        "--seed", type=int, default=None, help="number of epochs"
+        "--seed", type=int, default=None, help="random seed"
     )
     parser.add_argument(
         "--epochs", type=int, default=100000, help="number of epochs"
