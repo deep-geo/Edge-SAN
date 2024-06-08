@@ -172,7 +172,6 @@ def main(args):
 
     wandb.log({"test_loss": average_loss})
     wandb.log(test_metrics)
-    wandb.finish()
 
     if args.save_prompt:
         prompt_path = os.path.join(args.work_dir, f'{args.image_size}_prompt.json')
