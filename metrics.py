@@ -444,6 +444,8 @@ class AggregatedMetrics:
         # pq
         result["pq"] = result["dq"] * result["sq"]
 
+        result = {key: value.item() for key, value in result.items()}
+
         return result
 
     def average(self, metric: str):

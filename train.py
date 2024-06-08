@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import random
 import datetime
 import glob
@@ -101,7 +102,7 @@ def eval_model(args, model, test_loader):
     aggregated_metrics = AggregatedMetrics(args.metrics, all_eval_metrics).aggregate()
     average_loss = np.mean(test_loss)
 
-    print("\naggregated eval metrics: ", aggregated_metrics)
+    print("\naggregated eval metrics: ", json.dumps(aggregated_metrics, indent=2))
 
     return average_loss, aggregated_metrics
 
