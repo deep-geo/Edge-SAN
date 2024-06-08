@@ -214,7 +214,7 @@ def parse_test_args():
         "--seed", type=int, default=42, help="random seed"
     )
     parser.add_argument(
-        "--data_root", type=str, help="root directory of the train set"
+        "--data_root", type=str, default="", help="root directory of the train set"
     )
     parser.add_argument(
         "--num_workers", type=int, default=8, help="dataloader num_workers"

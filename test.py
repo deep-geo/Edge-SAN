@@ -96,19 +96,16 @@ def main(args):
     )
     print('Test data:', len(test_loader))
 
-    test_pbar = tqdm(test_loader)
-    l = len(test_loader)
-
     model.eval()
 
     all_metrics = []
     test_loss = []
     prompt_dict = {}
 
-    for i, batched_input in enumerate(test_pbar):
+    for i, batched_input in enumerate(tqdm(test_loader)):
         batched_input = to_device(batched_input, args.device)
         ori_labels = batched_input["ori_label"]
-        original_size = batched_input["original_size"]
+        original_size = batched_input["original_size"][0][0], batched_input["original_size"][1][0]
         labels = batched_input["label"]
         img_name = batched_input['name'][0]
         if args.save_prompt:
@@ -187,6 +184,8 @@ def main(args):
 
 if __name__ == '__main__':
     args = parse_test_args()
+
+    args.data_root = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/MoNuSeg2020"
 
     # Random seed Setting
     if args.seed is not None:

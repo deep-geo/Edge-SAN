@@ -260,17 +260,17 @@ class SegMetrics:
 
     def result(self) -> dict:
         result = {
-            metric: getattr(self, metric).item() if hasattr(self, metric) else None
+            metric: getattr(self, metric) if hasattr(self, metric) else None
             for metric in self._metrics
         }
         if "aji" in self._metrics:
             if "intersection" not in self._metrics:
                 result["intersection"] = self.intersection
             if "union" not in self._metrics:
-                result["union"] = self.union.item()
+                result["union"] = self.union
 
         for metric in ["tp", "fp", "tn", "fn"]:
-            result[metric] = getattr(self, metric).item()
+            result[metric] = getattr(self, metric)
 
         return result
 
