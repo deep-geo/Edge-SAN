@@ -185,7 +185,7 @@ def main(args):
 if __name__ == '__main__':
     args = parse_test_args()
 
-    args.data_root = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/MoNuSeg2020"
+    # args.data_root = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/MoNuSeg2020"
 
     # Random seed Setting
     if args.seed is not None:
