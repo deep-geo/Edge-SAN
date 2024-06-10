@@ -85,7 +85,8 @@ class PseudoSchedular:
 
 
 @torch.no_grad()
-def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None):
+def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
+                    task_id: int = None):
     model.eval()
     mask_predictor = MaskPredictor(
         model=model,
@@ -103,7 +104,11 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None):
     if not img_paths:
         img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
 
-    for path in tqdm(img_paths, desc="Generating pseudo mask"):
+    desc = "Generating pseudo mask"
+    if task_id:
+        desc = f"{desc}, task_id: {task_id}"
+
+    for path in tqdm(img_paths, desc=desc):
         image = cv2.imread(path)
         if image is None:
             print(f"Could not load '{path}' as an image, skipping...")
@@ -147,7 +152,10 @@ def generate_pseudo_multiple(args, model, pseudo_root: str, num_processes: int =
     tasks = []
     len_split = len(img_paths) // num_processes
     for i in range(0, len(img_paths), len_split):
-        tasks.append(img_paths[i:i + len_split])
+        if i < len(len_split(img_paths)) - 1:
+            tasks.append(img_paths[i:i + len_split])
+        else:
+            tasks.append(img_paths[i:])
 
     processes = []
     split_paths = []

@@ -106,7 +106,7 @@ def parse_train_args():
         help="epoch to start generating unsupervised dataset"
     )
     parser.add_argument(
-        "--unsupervised_step", type=int, default=None,
+        "--unsupervised_step", type=int, default=1,
         help="step to update unsupervised dataset"
     )
     parser.add_argument(

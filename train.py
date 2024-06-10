@@ -422,7 +422,9 @@ def main(args):
 if __name__ == '__main__':
     args = parse_train_args()
     args.encoder_adapter = True
-    # # args.activate_unsupervised = True
+    # args.activate_unsupervised = True
     # args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
     # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
+    # args.unsupervised_dir = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/CoNIC/data"
+
     main(args)
