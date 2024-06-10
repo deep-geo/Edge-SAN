@@ -17,7 +17,9 @@ import random
 import cv2
 import numpy as np
 import torch
+import torch.multiprocessing as mp
 
+from typing import List
 from tqdm import tqdm
 from preprocess.split_dataset import split_dataset
 from utils import get_transform, calc_step, MaskPredictor
@@ -83,7 +85,7 @@ class PseudoSchedular:
 
 
 @torch.no_grad()
-def generate_pseudo(args, model, pseudo_root: str):
+def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None):
     model.eval()
     mask_predictor = MaskPredictor(
         model=model,
@@ -98,7 +100,8 @@ def generate_pseudo(args, model, pseudo_root: str):
     os.makedirs(pseudo_data_dir, exist_ok=True)
     os.makedirs(pseudo_label_dir, exist_ok=True)
 
-    img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
+    if not img_paths:
+        img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
 
     for path in tqdm(img_paths, desc="Generating pseudo mask"):
         image = cv2.imread(path)
@@ -136,3 +139,21 @@ def generate_pseudo(args, model, pseudo_root: str):
         cv2.imwrite(img_path, dst_label_uint8)
 
     split_dataset(data_root=pseudo_root, ext="png", test_size=0.0)
+
+
+@torch.no_grad()
+def generate_pseudo_multiple(args, model, pseudo_root: str, num_processes: int = 2):
+    img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
+    tasks = []
+    len_split = len(img_paths) // num_processes
+    for i in range(0, len(img_paths), len_split):
+        tasks.append(img_paths[i:i + len_split])
+
+    processes = []
+    for task in tasks:
+        p = mp.Process(target=generate_pseudo, args=(args, model, pseudo_root, task))
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()

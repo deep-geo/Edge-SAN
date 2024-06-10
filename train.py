@@ -18,7 +18,7 @@ from loss import FocalDiceloss_IoULoss
 from arguments import parse_train_args
 from metrics import SegMetrics, AggregatedMetrics
 from tqdm import tqdm
-from pseudo import PseudoSchedular, generate_pseudo
+from pseudo import PseudoSchedular, generate_pseudo_multiple
 
 torch.set_default_dtype(torch.float32)
 max_num_chkpt = 3
@@ -290,7 +290,7 @@ def main(args):
         pseudo_data_dir = os.path.join(pseudo_root, "data")
         os.makedirs(pseudo_data_dir, exist_ok=True)
 
-        generate_pseudo(args, model, pseudo_root)
+        generate_pseudo_multiple(args, model, pseudo_root)
 
         pseudo_schedular = PseudoSchedular(
             schedular_dir=run_dir,
@@ -403,7 +403,7 @@ def main(args):
             wandb.log({"pseudo_weight": pseudo_schedular.pseudo_weight}, step=epoch)
             if pseudo_schedular.is_active():
                 pseudo_root = os.path.join(run_dir, "pseudo")
-                generate_pseudo(args, model, pseudo_root)
+                generate_pseudo_multiple(args, model, pseudo_root)
                 pseudo_split_path = os.path.join(pseudo_root, "split.json")
                 train_dataset_pseudo = TrainingDataset(
                     split_paths=pseudo_split_path,
