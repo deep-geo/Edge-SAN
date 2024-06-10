@@ -19,6 +19,10 @@ from arguments import parse_train_args
 from metrics import SegMetrics, AggregatedMetrics
 from tqdm import tqdm
 from pseudo import PseudoSchedular, generate_pseudo_multiple
+import torch.multiprocessing as mp
+
+
+mp.set_start_method('spawn')
 
 torch.set_default_dtype(torch.float32)
 max_num_chkpt = 3

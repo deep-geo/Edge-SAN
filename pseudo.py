@@ -26,9 +26,6 @@ from preprocess.split_dataset import split_dataset
 from utils import get_transform, calc_step, MaskPredictor
 
 
-mp.set_start_method('spawn')
-
-
 class PseudoSchedular:
 
     def __init__(self, schedular_dir: str, current_epoch: int, step: int,
