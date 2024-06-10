@@ -290,7 +290,7 @@ def main(args):
         pseudo_data_dir = os.path.join(pseudo_root, "data")
         os.makedirs(pseudo_data_dir, exist_ok=True)
 
-        generate_pseudo_multiple(args, model, pseudo_root)
+        pseudo_split_paths = generate_pseudo_multiple(args, model, pseudo_root)
 
         pseudo_schedular = PseudoSchedular(
             schedular_dir=run_dir,
@@ -301,15 +301,15 @@ def main(args):
         )
 
         if resume_epoch >= args.unsupervised_start_epoch:
-            pseudo_split_path = os.path.join(pseudo_root, "split.json")
-            train_dataset_pseudo = TrainingDataset(
-                split_paths=pseudo_split_path,
-                point_num=1,
-                mask_num=args.mask_num,
-                requires_name=False,
-                is_pseudo=True
-            )
-            train_dataset = train_dataset_gt + train_dataset_pseudo
+            for pseudo_split_path in pseudo_split_paths:
+                train_dataset_pseudo = TrainingDataset(
+                    split_paths=pseudo_split_path,
+                    point_num=1,
+                    mask_num=args.mask_num,
+                    requires_name=False,
+                    is_pseudo=True
+                )
+                train_dataset = train_dataset_gt + train_dataset_pseudo
 
     test_dataset = TestingDataset(split_paths=args.split_paths,
                                   requires_name=True,

@@ -150,10 +150,15 @@ def generate_pseudo_multiple(args, model, pseudo_root: str, num_processes: int =
         tasks.append(img_paths[i:i + len_split])
 
     processes = []
-    for task in tasks:
-        p = mp.Process(target=generate_pseudo, args=(args, model, pseudo_root, task))
+    split_paths = []
+    for i, task in enumerate(tasks):
+        pseudo_dir = os.path.join(pseudo_root, f"split_{i}")
+        split_paths.append(os.path.join(pseudo_dir, "split.json"))
+        p = mp.Process(target=generate_pseudo, args=(args, model, pseudo_dir, task))
         p.start()
         processes.append(p)
 
     for p in processes:
         p.join()
+
+    return split_paths
