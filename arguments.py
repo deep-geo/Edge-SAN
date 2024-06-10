@@ -102,6 +102,10 @@ def parse_train_args():
         "--unsupervised_dir", type=str, help="dir cointaining unsupervised data"
     )
     parser.add_argument(
+        "--unsupervised_num_processes", type=int, default=2,
+        help="processes to generate pseudo masks"
+    )
+    parser.add_argument(
         "--unsupervised_start_epoch", type=int, default=0,
         help="epoch to start generating unsupervised dataset"
     )

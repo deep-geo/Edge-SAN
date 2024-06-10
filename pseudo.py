@@ -11,6 +11,7 @@ Schedular json file:
 
 """
 import glob
+import math
 import os
 import json
 import random
@@ -105,7 +106,7 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
         img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
 
     desc = "Generating pseudo mask"
-    if task_id:
+    if task_id is not None:
         desc = f"{desc}, task_id: {task_id}"
 
     for path in tqdm(img_paths, desc=desc):
@@ -147,22 +148,26 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
 
 
 @torch.no_grad()
-def generate_pseudo_multiple(args, model, pseudo_root: str, num_processes: int = 2):
+def generate_pseudo_multiple(args, model, pseudo_root: str):
     img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
     tasks = []
-    len_split = len(img_paths) // num_processes
+    len_split = len(img_paths) // args.unsupervised_num_processes
+    n_split = math.ceil(len(img_paths) / len_split)
     for i in range(0, len(img_paths), len_split):
-        if i < len(len_split(img_paths)) - 1:
+        if i / len_split < n_split - 2:
             tasks.append(img_paths[i:i + len_split])
         else:
             tasks.append(img_paths[i:])
+            break
+
+    # print("task lengths: ", [len(_) for _ in tasks])
 
     processes = []
     split_paths = []
     for i, task in enumerate(tasks):
         pseudo_dir = os.path.join(pseudo_root, f"split_{i}")
         split_paths.append(os.path.join(pseudo_dir, "split.json"))
-        p = mp.Process(target=generate_pseudo, args=(args, model, pseudo_dir, task))
+        p = mp.Process(target=generate_pseudo, args=(args, model, pseudo_dir, task, i))
         p.start()
         processes.append(p)
 
