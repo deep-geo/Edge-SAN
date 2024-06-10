@@ -7,8 +7,11 @@ import argparse
 from typing import List
 
 
-def split_dataset(data_root: str, ext: str, test_size: float, seed: int = None):
-    split_path = os.path.join(data_root, "split.json")
+def split_dataset(data_root: str, ext: str, test_size: float, seed: int = None,
+                  split_path: str = None):
+
+    if split_path is None:
+        split_path = os.path.join(data_root, "split.json")
 
     if ext.startswith("."):
         ext = ext[1:]
@@ -51,6 +54,8 @@ def split_dataset(data_root: str, ext: str, test_size: float, seed: int = None):
         json.dump(split_json, f, indent=2)
 
     print(f"Save split json to: {split_path}")
+
+    return split_path
 
 
 if __name__ == "__main__":

@@ -111,6 +111,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                     pseudo_schedular):
     train_loader_bar = tqdm(train_loader)
     train_losses = []
+    dataset_names = []
 
     pseudo_weights = None
 
@@ -123,6 +124,8 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         #     break
         batched_input = stack_dict_batched(batched_input)
         batched_input = to_device(batched_input, args.device)
+
+        dataset_names.append(batched_input["dataset_name"])
 
         if random.random() > 0.5:
             batched_input["point_coords"] = None

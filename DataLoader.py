@@ -12,6 +12,7 @@ from albumentations.pytorch import ToTensorV2
 from tqdm import tqdm
 from utils import get_boxes_from_mask, init_point_sampling, get_edge_points_from_mask
 from torch.utils.data import Dataset
+from preprocess.split_dataset import split_dataset
 
 
 class TestingDataset(Dataset):
@@ -313,6 +314,74 @@ class TestingDatasetFolder(TestingDataset):
                 label_paths.append((val, label_path))
 
         return image_paths, label_paths
+
+
+class TrainingDatasetFolder(TrainingDataset):
+
+    def __init__(self, data_root: str, train_size: float,
+                 requires_name: bool = True, point_num: int = 1,
+                 mask_num: int = 5, edge_point_num: int = 3,
+                 random_seed: int = 42):
+
+        self.data_root = data_root
+        self.train_size = train_size
+        self.random_seed = random_seed
+
+        super().__init__(
+            split_paths=self.get_split_paths(), requires_name=requires_name,
+            point_num=point_num, mask_num=mask_num,
+            edge_point_num=edge_point_num, is_pseudo=False
+        )
+
+    def is_dataset_dir(self, dir_path: str) -> bool:
+        return os.path.exists(os.path.join(dir_path, "data")) and \
+               os.path.exists(os.path.join(dir_path, "label"))
+
+    def get_split_path(self, dir_path: str) -> str:
+        return os.path.join(
+            dir_path,
+            f"split_seed-{self.random_seed}_test_size-{1-self.train_size}.json"
+        )
+
+    def get_split_paths(self):
+        split_paths = []
+        if self.is_dataset_dir(self.data_root):
+            split_path = self.get_split_path(self.data_root)
+            if not os.path.exists(split_path):
+                split_dataset(
+                    self.data_root,
+                    ext="png",
+                    test_size=1-self.train_size,
+                    seed=self.random_seed,
+                    split_path=split_path
+                )
+            split_paths.append(split_path)
+        else:
+            for name in os.listdir(self.data_root):
+                sub_dir_path = os.path.join(self.data_root, name)
+                if os.path.isdir(sub_dir_path):
+                    split_path = self.get_split_path(sub_dir_path)
+                    if not os.path.exists(split_path):
+                        split_dataset(
+                            self.data_root,
+                            ext="png",
+                            test_size=1 - self.train_size,
+                            seed=self.random_seed,
+                            split_path=split_path
+                        )
+                    split_paths.append(split_path)
+
+        return split_paths
+
+    def __getitem__(self, index):
+        data = super().__getitem__(index)
+        image_path = data["image_path"]
+        data["dataset_name"] = os.path.basename(
+            os.path.dirname(
+                os.path.dirname(image_path)
+            )
+        )
+        return data
 
 
 def find_overlapping_edges(label):
