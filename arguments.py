@@ -41,6 +41,10 @@ def parse_train_args():
         help="path list of the split json files"
     )
     parser.add_argument(
+        '--data_root', type=str, default=None,
+        help="root dir of dataset or multiple datasets"
+    )
+    parser.add_argument(
         "--metrics",
         nargs='+',
         default=['iou', 'dice', 'precision', 'f1_score', 'recall',

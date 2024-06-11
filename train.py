@@ -11,7 +11,8 @@ import wandb
 from segment_anything import sam_model_registry
 from torch import optim
 from torch.utils.data import DataLoader
-from DataLoader import TrainingDataset, TestingDataset, stack_dict_batched
+from DataLoader import TrainingDataset, TestingDataset, TrainingDatasetFolder, \
+    stack_dict_batched
 from utils import get_logger, generate_point, setting_prompt_none, save_masks, \
     postprocess_masks, to_device, prompt_and_decoder, MaskPredictor
 from loss import FocalDiceloss_IoULoss
@@ -30,6 +31,8 @@ max_num_chkpt = 3
 def eval_model(args, model, test_loader):
     model.eval()
 
+    dataset_names = []
+
     criterion = FocalDiceloss_IoULoss()
 
     test_loss = []
@@ -40,6 +43,7 @@ def eval_model(args, model, test_loader):
         # if i > 2:
         #     break
         batched_input = to_device(batched_input, args.device)
+        dataset_names.append(batched_input["dataset_name"])
         ori_labels = batched_input["ori_label"]
         batch_original_size = batched_input["original_size"]
         original_size = batch_original_size[0][0], batch_original_size[1][0]
@@ -113,21 +117,18 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                     pseudo_schedular):
     train_loader_bar = tqdm(train_loader)
     train_losses = []
-    dataset_names = []
 
     pseudo_weights = None
 
     # all_train_metrics = []
 
-    # nn = 0
+    nn = 0
     for batch, batched_input in enumerate(train_loader_bar):
-        # nn += 1
-        # if nn > 2:
-        #     break
+        nn += 1
+        if nn > 2:
+            break
         batched_input = stack_dict_batched(batched_input)
         batched_input = to_device(batched_input, args.device)
-
-        dataset_names.append(batched_input["dataset_name"])
 
         if random.random() > 0.5:
             batched_input["point_coords"] = None
@@ -280,13 +281,23 @@ def main(args):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-    train_dataset = train_dataset_gt = TrainingDataset(
-        split_paths=args.split_paths,
-        point_num=1,
-        mask_num=args.mask_num,
-        requires_name=False,
-        is_pseudo=False
-    )
+    if args.data_root:
+        train_dataset = train_dataset_gt = TrainingDatasetFolder(
+            data_root=args.data_root,
+            point_num=1,
+            mask_num=args.mask_num,
+            requires_name=False
+        )
+    elif args.split_paths:
+        train_dataset = train_dataset_gt = TrainingDataset(
+            split_paths=args.split_paths,
+            point_num=1,
+            mask_num=args.mask_num,
+            requires_name=False,
+            is_pseudo=False
+        )
+    else:
+        raise ValueError(f"No dataset provided!")
 
     # pseudo dataset
     pseudo_schedular = None
@@ -359,7 +370,7 @@ def main(args):
         average_train_loss = np.mean(train_losses)
 
         print("\nEvaluate model...")
-        average_test_loss, test_metrics = (eval_model(args, model, test_loader))
+        average_test_loss, test_metrics = eval_model(args, model, test_loader)
 
         wandb.log(
             {"Loss/train": average_train_loss, "Loss/test": average_test_loss},
@@ -432,8 +443,8 @@ if __name__ == '__main__':
 
     args.encoder_adapter = True
     # args.activate_unsupervised = True
-    # args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
-    # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
+    args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
+    args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
     # args.unsupervised_dir = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/CoNIC/data"
 
     main(args)
