@@ -22,8 +22,6 @@ from pseudo import PseudoSchedular, generate_pseudo_multiple
 import torch.multiprocessing as mp
 
 
-mp.set_start_method('spawn')
-
 torch.set_default_dtype(torch.float32)
 max_num_chkpt = 3
 
@@ -313,7 +311,7 @@ def main(args):
                     requires_name=False,
                     is_pseudo=True
                 )
-                train_dataset = train_dataset_gt + train_dataset_pseudo
+                train_dataset += train_dataset_pseudo
 
     test_dataset = TestingDataset(split_paths=args.split_paths,
                                   requires_name=True,
@@ -406,17 +404,18 @@ def main(args):
         if args.activate_unsupervised:
             wandb.log({"pseudo_weight": pseudo_schedular.pseudo_weight}, step=epoch)
             if pseudo_schedular.is_active():
+                train_dataset = train_dataset_gt
                 pseudo_root = os.path.join(run_dir, "pseudo")
-                generate_pseudo_multiple(args, model, pseudo_root)
-                pseudo_split_path = os.path.join(pseudo_root, "split.json")
-                train_dataset_pseudo = TrainingDataset(
-                    split_paths=pseudo_split_path,
-                    point_num=1,
-                    mask_num=args.mask_num,
-                    requires_name=False,
-                    is_pseudo=True
-                )
-                train_dataset = train_dataset_gt + train_dataset_pseudo
+                pseudo_split_paths = generate_pseudo_multiple(args, model, pseudo_root)
+                for pseudo_split_path in pseudo_split_paths:
+                    train_dataset_pseudo = TrainingDataset(
+                        split_paths=pseudo_split_path,
+                        point_num=1,
+                        mask_num=args.mask_num,
+                        requires_name=False,
+                        is_pseudo=True
+                    )
+                    train_dataset += train_dataset_pseudo
                 train_loader = DataLoader(train_dataset,
                                           batch_size=args.batch_size,
                                           shuffle=True,
@@ -424,6 +423,8 @@ def main(args):
 
 
 if __name__ == '__main__':
+    mp.set_start_method('spawn')
+
     args = parse_train_args()
 
     args.encoder_adapter = True
