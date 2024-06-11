@@ -186,9 +186,9 @@ class TrainingDataset(Dataset):
 
     def __add__(self, other):
         instance = copy.deepcopy(self)
-        instance.image_paths = self.image_paths + other.image_paths
-        instance.label_paths = self.image_paths + other.label_paths
-        instance.pseudo = self.pseudos + other.pseudos
+        instance.image_paths += other.image_paths
+        instance.label_paths += other.label_paths
+        instance.pseudos += other.pseudos
         return instance
     
     def __getitem__(self, index):
