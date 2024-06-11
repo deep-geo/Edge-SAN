@@ -147,19 +147,26 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
     split_dataset(data_root=pseudo_root, ext="png", test_size=0.0)
 
 
+def split_list(lst, num_parts):
+
+    avg_len = len(lst) // num_parts
+    remainder = len(lst) % num_parts
+
+    result = []
+    start = 0
+
+    for i in range(num_parts):
+        end = start + avg_len + (1 if i < remainder else 0)
+        result.append(lst[start:end])
+        start = end
+
+    return result
+
+
 @torch.no_grad()
 def generate_pseudo_multiple(args, model, pseudo_root: str):
     img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
-    tasks = []
-    len_split = len(img_paths) // args.unsupervised_num_processes
-    n_split = math.ceil(len(img_paths) / len_split)
-    for i in range(0, len(img_paths), len_split):
-        if i / len_split < n_split - 2:
-            tasks.append(img_paths[i:i + len_split])
-        else:
-            tasks.append(img_paths[i:])
-            break
-
+    tasks = split_list(img_paths, args.unsupervised_num_processes)
     # print("task lengths: ", [len(_) for _ in tasks])
 
     processes = []
