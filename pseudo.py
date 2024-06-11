@@ -11,13 +11,16 @@ Schedular json file:
 
 """
 import glob
+import math
 import os
 import json
 import random
 import cv2
 import numpy as np
 import torch
+import torch.multiprocessing as mp
 
+from typing import List
 from tqdm import tqdm
 from preprocess.split_dataset import split_dataset
 from utils import get_transform, calc_step, MaskPredictor
@@ -83,7 +86,8 @@ class PseudoSchedular:
 
 
 @torch.no_grad()
-def generate_pseudo(args, model, pseudo_root: str):
+def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
+                    task_id: int = None):
     model.eval()
     mask_predictor = MaskPredictor(
         model=model,
@@ -98,9 +102,14 @@ def generate_pseudo(args, model, pseudo_root: str):
     os.makedirs(pseudo_data_dir, exist_ok=True)
     os.makedirs(pseudo_label_dir, exist_ok=True)
 
-    img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
+    if not img_paths:
+        img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
 
-    for path in tqdm(img_paths, desc="Generating pseudo mask"):
+    desc = "Generating pseudo mask"
+    if task_id is not None:
+        desc = f"{desc}, task_id: {task_id}"
+
+    for path in tqdm(img_paths, desc=desc):
         image = cv2.imread(path)
         if image is None:
             print(f"Could not load '{path}' as an image, skipping...")
@@ -136,3 +145,40 @@ def generate_pseudo(args, model, pseudo_root: str):
         cv2.imwrite(img_path, dst_label_uint8)
 
     split_dataset(data_root=pseudo_root, ext="png", test_size=0.0)
+
+
+def split_list(lst, num_parts):
+
+    avg_len = len(lst) // num_parts
+    remainder = len(lst) % num_parts
+
+    result = []
+    start = 0
+
+    for i in range(num_parts):
+        end = start + avg_len + (1 if i < remainder else 0)
+        result.append(lst[start:end])
+        start = end
+
+    return result
+
+
+@torch.no_grad()
+def generate_pseudo_multiple(args, model, pseudo_root: str):
+    img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
+    tasks = split_list(img_paths, args.unsupervised_num_processes)
+    # print("task lengths: ", [len(_) for _ in tasks])
+
+    processes = []
+    split_paths = []
+    for i, task in enumerate(tasks):
+        pseudo_dir = os.path.join(pseudo_root, f"split_{i}")
+        split_paths.append(os.path.join(pseudo_dir, "split.json"))
+        p = mp.Process(target=generate_pseudo, args=(args, model, pseudo_dir, task, i))
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
+
+    return split_paths

@@ -27,6 +27,7 @@ python train.py \
 --unsupervised_start_epoch 0 \
 --unsupervised_step 1 \
 --unsupervised_weight_gr 0.1 \
+--unsupervised_num_processes 2 \
 --pred_iou_thresh 0.88 \
 --stability_score_thresh 0.95 \
 --points_per_side 32 \
