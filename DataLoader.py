@@ -189,7 +189,7 @@ class TrainingDataset(Dataset):
         instance.image_paths = self.image_paths + other.image_paths
         instance.label_paths = self.image_paths + other.label_paths
         instance.pseudo = self.pseudos + other.pseudos
-        return self
+        return instance
     
     def __getitem__(self, index):
         """
