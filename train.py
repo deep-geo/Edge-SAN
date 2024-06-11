@@ -284,6 +284,7 @@ def main(args):
         requires_name=False,
         is_pseudo=False
     )
+    print("gt dataset length: ", len(train_dataset))
 
     # pseudo dataset
     pseudo_schedular = None
@@ -312,6 +313,8 @@ def main(args):
                     is_pseudo=True
                 )
                 train_dataset += train_dataset_pseudo
+
+        print("gt&pseudo dataset length: ", len(train_dataset))
 
     test_dataset = TestingDataset(split_paths=args.split_paths,
                                   requires_name=True,
@@ -405,6 +408,7 @@ def main(args):
             wandb.log({"pseudo_weight": pseudo_schedular.pseudo_weight}, step=epoch)
             if pseudo_schedular.is_active():
                 train_dataset = train_dataset_gt
+                print("gt dataset length: ", len(train_dataset))
                 pseudo_root = os.path.join(run_dir, "pseudo")
                 pseudo_split_paths = generate_pseudo_multiple(args, model, pseudo_root)
                 for pseudo_split_path in pseudo_split_paths:
@@ -416,6 +420,7 @@ def main(args):
                         is_pseudo=True
                     )
                     train_dataset += train_dataset_pseudo
+                print("gt&pseudo dataset length: ", len(train_dataset))
                 train_loader = DataLoader(train_dataset,
                                           batch_size=args.batch_size,
                                           shuffle=True,
@@ -428,9 +433,9 @@ if __name__ == '__main__':
     args = parse_train_args()
 
     args.encoder_adapter = True
-    # args.activate_unsupervised = True
-    # args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
-    # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
-    # args.unsupervised_dir = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/CoNIC/data"
+    args.activate_unsupervised = True
+    args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
+    args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
+    args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/GlandSeg/data"
 
     main(args)
