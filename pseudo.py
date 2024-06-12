@@ -66,7 +66,7 @@ class PseudoSchedular:
 
     @property
     def pseudo_weight(self):
-        return min(self._pseudo_weight_gr * self._current_epoch, 1)
+        return min(self._pseudo_weight_gr * (self._current_epoch - self._start_epoch + 1), 1)
 
     def step(self):
         self._current_epoch += 1
@@ -77,9 +77,19 @@ class PseudoSchedular:
         schedular_data = self._read()
         if self._current_epoch in schedular_data["schedular"]:
             active = True
-        elif (self._current_epoch != 0 and self._current_epoch % self._step == 0) \
-                and self._current_epoch not in schedular_data["skip"]:
-            active = True
+        elif self._current_epoch < self._start_epoch:
+            active = False
+        elif self._current_epoch not in schedular_data["skip"]:
+            if self._start_epoch == 0:
+                if self._current_epoch % self._step == 0:
+                    active = True
+                else:
+                    active = False
+            else:
+                if self._current_epoch != 0 and self._current_epoch % self._step == 0:
+                    active = True
+                else:
+                    active = False
         else:
             active = False
         return active
@@ -105,7 +115,7 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
     if not img_paths:
         img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
 
-    desc = "Generating pseudo mask"
+    desc = "Generating pseudo masks"
     if task_id is not None:
         desc = f"{desc}, task_id: {task_id}"
 
