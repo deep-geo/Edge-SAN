@@ -131,6 +131,11 @@ class TestingDataset(Dataset):
         image_input["original_size"] = (h, w)
         image_input["image_path"] = image_path
         image_input["label_path"] = '/'.join(mask_path.split('/')[:-1])
+        image_input["dataset_name"] = os.path.basename(
+            os.path.dirname(
+                os.path.dirname(image_path)
+            )
+        )
 
         if self.return_ori_mask:
             image_input["ori_label"] = ori_mask
@@ -265,6 +270,11 @@ class TrainingDataset(Dataset):
             image_input["edges"] = edges
             image_input["image_path"] = image_path
             image_input["pseudo"] = self.pseudos[index]
+            image_input["dataset_name"] = os.path.basename(
+                os.path.dirname(
+                    os.path.dirname(image_path)
+                )
+            )
 
             image_name = self.image_paths[index].split('/')[-1]
             if self.requires_name:
@@ -287,51 +297,7 @@ def stack_dict_batched(batched_input):
     return out_dict
 
 
-class TestingDatasetFolder(TestingDataset):
-
-    def __init__(self, data_root: str, requires_name=True, point_num=1,
-                 return_ori_mask=True, prompt_path=None):
-        self.data_root = data_root
-        super().__init__(split_paths=[], requires_name=requires_name,
-                         point_num=point_num, return_ori_mask=return_ori_mask,
-                         prompt_path=prompt_path)
-
-    def read_data(self):
-        image_paths = []
-        label_paths = []
-
-        data_dir = os.path.join(self.data_root, "data")
-        label_dir = os.path.join(self.data_root, "label")
-        print(f"\nRead test data from: {self.data_root}")
-        data_paths = glob.glob(os.path.join(data_dir, "*.png"))
-        for data_path in tqdm(data_paths):
-            label_name = os.path.basename(data_path)[:-4] + ".npy"
-            label_path = os.path.join(label_dir, label_name)
-            label = np.load(label_path)
-            vals = sorted([val for val in np.unique(label) if val != 0])
-            for val in vals:
-                image_paths.append(data_path)
-                label_paths.append((val, label_path))
-
-        return image_paths, label_paths
-
-
-class TrainingDatasetFolder(TrainingDataset):
-
-    def __init__(self, data_root: str, train_size: float,
-                 requires_name: bool = True, point_num: int = 1,
-                 mask_num: int = 5, edge_point_num: int = 3,
-                 random_seed: int = 42):
-
-        self.data_root = data_root
-        self.train_size = train_size
-        self.random_seed = random_seed
-
-        super().__init__(
-            split_paths=self.get_split_paths(), requires_name=requires_name,
-            point_num=point_num, mask_num=mask_num,
-            edge_point_num=edge_point_num, is_pseudo=False
-        )
+class DatasetFolderMixin:
 
     def is_dataset_dir(self, dir_path: str) -> bool:
         return os.path.exists(os.path.join(dir_path, "data")) and \
@@ -340,18 +306,19 @@ class TrainingDatasetFolder(TrainingDataset):
     def get_split_path(self, dir_path: str) -> str:
         return os.path.join(
             dir_path,
-            f"split_seed-{self.random_seed}_test_size-{1-self.train_size}.json"
+            f"split_seed-{self.random_seed}_test_size-{self.test_size}.json"
         )
 
     def get_split_paths(self):
         split_paths = []
         if self.is_dataset_dir(self.data_root):
             split_path = self.get_split_path(self.data_root)
-            if not os.path.exists(split_path):
+            # if not os.path.exists(split_path):
+            if True:
                 split_dataset(
                     self.data_root,
                     ext="png",
-                    test_size=1-self.train_size,
+                    test_size=self.test_size,
                     seed=self.random_seed,
                     split_path=split_path
                 )
@@ -361,11 +328,12 @@ class TrainingDatasetFolder(TrainingDataset):
                 sub_dir_path = os.path.join(self.data_root, name)
                 if os.path.isdir(sub_dir_path):
                     split_path = self.get_split_path(sub_dir_path)
-                    if not os.path.exists(split_path):
+                    # if not os.path.exists(split_path):
+                    if True:
                         split_dataset(
-                            self.data_root,
+                            sub_dir_path,
                             ext="png",
-                            test_size=1 - self.train_size,
+                            test_size=self.test_size,
                             seed=self.random_seed,
                             split_path=split_path
                         )
@@ -373,15 +341,99 @@ class TrainingDatasetFolder(TrainingDataset):
 
         return split_paths
 
-    def __getitem__(self, index):
-        data = super().__getitem__(index)
-        image_path = data["image_path"]
-        data["dataset_name"] = os.path.basename(
-            os.path.dirname(
-                os.path.dirname(image_path)
-            )
+
+class TestingDatasetFolder(TestingDataset, DatasetFolderMixin):
+
+    def __init__(self, data_root: str, test_size: float, requires_name=True,
+                 point_num=1, return_ori_mask=True, prompt_path=None,
+                 random_seed: int = 42, sample_rate: float = 1.0):
+
+        self.data_root = data_root
+        self.test_size = test_size
+        self.random_seed = random_seed
+
+        super().__init__(
+            split_paths=self.get_split_paths(), requires_name=requires_name,
+            point_num=point_num, return_ori_mask=return_ori_mask,
+            prompt_path=prompt_path, sample_rate=sample_rate
         )
-        return data
+
+    # def read_data(self):
+    #     image_paths = []
+    #     label_paths = []
+    #
+    #     data_dir = os.path.join(self.data_root, "data")
+    #     label_dir = os.path.join(self.data_root, "label")
+    #     print(f"\nRead test data from: {self.data_root}")
+    #     data_paths = glob.glob(os.path.join(data_dir, "*.png"))
+    #     for data_path in tqdm(data_paths):
+    #         label_name = os.path.basename(data_path)[:-4] + ".npy"
+    #         label_path = os.path.join(label_dir, label_name)
+    #         label = np.load(label_path)
+    #         vals = sorted([val for val in np.unique(label) if val != 0])
+    #         for val in vals:
+    #             image_paths.append(data_path)
+    #             label_paths.append((val, label_path))
+    #
+    #     return image_paths, label_paths
+
+
+class TrainingDatasetFolder(TrainingDataset, DatasetFolderMixin):
+
+    def __init__(self, data_root: str, train_size: float,
+                 requires_name: bool = True, point_num: int = 1,
+                 mask_num: int = 5, edge_point_num: int = 3,
+                 random_seed: int = 42):
+
+        self.data_root = data_root
+        self.test_size = 1 - train_size
+        self.random_seed = random_seed
+
+        super().__init__(
+            split_paths=self.get_split_paths(), requires_name=requires_name,
+            point_num=point_num, mask_num=mask_num,
+            edge_point_num=edge_point_num, is_pseudo=False
+        )
+
+    # def is_dataset_dir(self, dir_path: str) -> bool:
+    #     return os.path.exists(os.path.join(dir_path, "data")) and \
+    #            os.path.exists(os.path.join(dir_path, "label"))
+    #
+    # def get_split_path(self, dir_path: str) -> str:
+    #     return os.path.join(
+    #         dir_path,
+    #         f"split_seed-{self.random_seed}_test_size-{1-self.train_size}.json"
+    #     )
+
+    # def get_split_paths(self):
+    #     split_paths = []
+    #     if self.is_dataset_dir(self.data_root):
+    #         split_path = self.get_split_path(self.data_root)
+    #         if not os.path.exists(split_path):
+    #             split_dataset(
+    #                 self.data_root,
+    #                 ext="png",
+    #                 test_size=1-self.train_size,
+    #                 seed=self.random_seed,
+    #                 split_path=split_path
+    #             )
+    #         split_paths.append(split_path)
+    #     else:
+    #         for name in os.listdir(self.data_root):
+    #             sub_dir_path = os.path.join(self.data_root, name)
+    #             if os.path.isdir(sub_dir_path):
+    #                 split_path = self.get_split_path(sub_dir_path)
+    #                 if not os.path.exists(split_path):
+    #                     split_dataset(
+    #                         self.data_root,
+    #                         ext="png",
+    #                         test_size=1 - self.train_size,
+    #                         seed=self.random_seed,
+    #                         split_path=split_path
+    #                     )
+    #                 split_paths.append(split_path)
+    #
+    #     return split_paths
 
 
 def find_overlapping_edges(label):

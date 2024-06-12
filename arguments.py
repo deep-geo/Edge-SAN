@@ -9,13 +9,17 @@ def parse_train_args():
         "--work_dir", type=str, default="workdir", help="work dir"
     )
     parser.add_argument(
+        "--test_size", type=float, default=None,
+        help="split rate of test set"
+    )
+    parser.add_argument(
         "--run_name",
         type=str,
         default=f"run-{str(datetime.datetime.now())[:19].replace(' ', '_').replace(':', '-')}",
         help="run model name"
     )
     parser.add_argument(
-        "--seed", type=int, default=None, help="random seed"
+        "--seed", type=int, default=42, help="random seed"
     )
     parser.add_argument(
         "--epochs", type=int, default=100000, help="number of epochs"
