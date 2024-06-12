@@ -28,7 +28,7 @@ max_num_chkpt = 3
 
 
 @torch.no_grad()
-def eval_model(args, model, test_loader):
+def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
     model.eval()
 
     dataset_names = []
@@ -40,8 +40,8 @@ def eval_model(args, model, test_loader):
     all_eval_metrics = []
 
     for i, batched_input in enumerate(tqdm(test_loader)):
-        if i > 5:
-            break
+        # if i > 8:
+        #     break
         batched_input = to_device(batched_input, args.device)
         dataset_names.append(batched_input["dataset_name"])
         ori_labels = batched_input["ori_label"]
@@ -103,14 +103,20 @@ def eval_model(args, model, test_loader):
         seg_metrics = SegMetrics(args.metrics, masks, labels)
         all_eval_metrics.append(seg_metrics.result())
 
-        # print("\neval seg_metrics: ", seg_metrics.result())
-
-    aggregated_metrics = AggregatedMetrics(args.metrics, all_eval_metrics).aggregate()
     average_loss = np.mean(test_loss)
 
-    print("\naggregated eval metrics: ", json.dumps(aggregated_metrics, indent=2))
+    agg_metrics = AggregatedMetrics(args.metrics, all_eval_metrics, dataset_names)
+    metrics_overall = agg_metrics.aggregate()
+    if output_dataset_metrics:
+        metrics_datasets = agg_metrics.aggregate_by_datasets()
+    else:
+        metrics_datasets = None
 
-    return average_loss, aggregated_metrics
+    print("\naggregated whole metrics: ", json.dumps(metrics_overall, indent=2))
+    if metrics_datasets is not None:
+        print("\naggregated datasets metrics: ", json.dumps(metrics_datasets, indent=2))
+
+    return average_loss, metrics_overall, metrics_datasets
 
 
 def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
@@ -124,9 +130,9 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
     nn = 0
     for batch, batched_input in enumerate(train_loader_bar):
-        nn += 1
-        if nn > 2:
-            break
+        # nn += 1
+        # if nn > 2:
+        #     break
         batched_input = stack_dict_batched(batched_input)
         batched_input = to_device(batched_input, args.device)
 
@@ -327,14 +333,15 @@ def main(args):
 
         pseudo_schedular = PseudoSchedular(
             schedular_dir=run_dir,
-            current_epoch=0,
+            current_step=0,
             step=args.unsupervised_step if args.unsupervised_step else 1,
-            start_epoch=args.unsupervised_start_epoch,
+            start_step=args.unsupervised_start_epoch,
             pseudo_weight_gr=args.unsupervised_weight_gr
         )
 
         if pseudo_schedular.is_active():
-            print("\nactivate pseudo, weight: ", pseudo_schedular.pseudo_weight)
+            print(f"\nactivate pseudo: current step {pseudo_schedular.current_step}, "
+                  f"weight {pseudo_schedular.pseudo_weight}")
             pseudo_split_paths = generate_pseudo_multiple(args, model, pseudo_root)
             for pseudo_split_path in pseudo_split_paths:
                 train_dataset_pseudo = TrainingDataset(
@@ -346,7 +353,7 @@ def main(args):
                 )
                 train_dataset += train_dataset_pseudo
 
-        print("\ngt & pseudo dataset length: ", len(train_dataset))
+            print("\ngt & pseudo dataset length: ", len(train_dataset))
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
                               shuffle=True, num_workers=args.num_workers)
@@ -362,12 +369,27 @@ def main(args):
 
     best_loss = 1e10
 
-    semantic_seg_metric_names = ['dice', 'iou','precision', 'f1_score',
-                                 'recall', 'specificity','accuracy']
-    instance_seg_metric_names = ['aji', 'dq', 'sq', 'pq']
+    print("\nEvaluate model using initial checkpoint...")
+    average_test_loss, test_metrics_overall, test_metrics_datasets = \
+        eval_model(args, model, test_loader, output_dataset_metrics=True)
+
+    metrics_dict = {}
+    for metric in args.metrics:
+        metrics_dict[f"Overall/{metric}"] = test_metrics_overall.get(metric, None)
+        if test_metrics_datasets:
+            for dataset_name in test_metrics_datasets.keys():
+                metrics_dict[f"{dataset_name}/{metric}"] = \
+                    test_metrics_datasets[dataset_name].get(metric, None)
+
+    metrics_dict["Loss/train"] = 0.0
+    metrics_dict["Loss/test"] = 0.0
+
+    wandb.log(metrics_dict)
     
     for epoch in range(resume_epoch, args.epochs):
         print(f"\nTrain epoch {epoch}...")
+
+        metrics_dict = {}
 
         model.train()
 
@@ -385,21 +407,19 @@ def main(args):
         average_train_loss = np.mean(train_losses)
 
         print("\nEvaluate model...")
-        average_test_loss, test_metrics = eval_model(args, model, test_loader)
-
-        wandb.log(
-            {"Loss/train": average_train_loss, "Loss/test": average_test_loss},
-            step=epoch
-        )
+        average_test_loss, test_metrics_overall, test_metrics_datasets = \
+            eval_model(args, model, test_loader, output_dataset_metrics=True)
 
         metrics_dict = {}
         for metric in args.metrics:
-            if metric in semantic_seg_metric_names:
-                metrics_dict[f'SemanticSeg/{metric}'] = test_metrics.get(metric, None)
-            elif metric in instance_seg_metric_names:
-                metrics_dict[f'InstanceSeg/{metric}'] = test_metrics.get(metric, None)
+            metrics_dict[f"Overall/{metric}"] = test_metrics_overall.get(metric, None)
+            if test_metrics_datasets:
+                for dataset_name in test_metrics_datasets.keys():
+                    metrics_dict[f"{dataset_name}/{metric}"] = \
+                        test_metrics_datasets[dataset_name].get(metric, None)
 
-        wandb.log(metrics_dict, step=epoch)
+        metrics_dict["Loss/train"] = average_train_loss
+        metrics_dict["Loss/test"] = average_test_loss
 
         lr = scheduler.get_last_lr()[
             0] if args.lr_scheduler is not None else args.lr
@@ -431,9 +451,14 @@ def main(args):
             torch.save(state, save_path)
 
         if args.activate_unsupervised:
-            wandb.log({"pseudo_weight": pseudo_schedular.pseudo_weight}, step=epoch)
+            metrics_dict["pseudo_weight"] = pseudo_schedular.pseudo_weight
+
+        wandb.log(metrics_dict)
+
+        if args.activate_unsupervised:
             if pseudo_schedular.is_active():
-                print("\nactivate pseudo, weight: ", pseudo_schedular.pseudo_weight)
+                print(f"\nactivate pseudo: current step {pseudo_schedular.current_step}, "
+                      f"weight {pseudo_schedular.pseudo_weight}")
                 train_dataset = train_dataset_gt
                 print("\ngt dataset length: ", len(train_dataset))
                 pseudo_root = os.path.join(run_dir, "pseudo")
@@ -460,12 +485,16 @@ if __name__ == '__main__':
     args = parse_train_args()
 
     args.encoder_adapter = True
-    # args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
-    args.data_root = "/Users/zhaojq/Datasets/ALL_Multi"
-    args.test_size = 0.1
-    args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
-    args.activate_unsupervised = True
-    args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CPM17/data"
+    # # args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
+    # args.data_root = "/Users/zhaojq/Datasets/ALL_Multi"
+    # args.test_size = 0.1
+    # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
+    # args.activate_unsupervised = True
+    # args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CPM17/data"
+    # args.batch_size = 4
+    # args.num_workers = 2
+    # points_per_side = 24
+    # args.points_per_batch = 64
     # args.unsupervised_start_epoch = 1
 
     main(args)

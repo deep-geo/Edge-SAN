@@ -412,33 +412,35 @@ class SegMetrics:
 
 class AggregatedMetrics:
 
-    def __init__(self, metrics: List[str], metric_data: List[dict]):
+    def __init__(self, metrics: List[str], metric_data: List[dict],
+                 dataset_names: List[List[str]] = None):
         self.metrics = metrics
         self.metric_data = metric_data
+        self.dataset_names = dataset_names
 
-    def aggregate(self):
+    def _aggregate(self, metrics_data: List[dict]):
         # average
         result = {}
         for metric in self.metrics:
-            if self.metric_data[0].get(metric, None) is None:
+            if metrics_data[0].get(metric, None) is None:
                 result[metric] = None
                 continue
             if metric != "aji" and metric not in instance_metrics:
-                result[metric] = self.average(metric)
+                result[metric] = self.average(metric, metrics_data)
 
         # aji - Aggregated Jaccard Index
         if "aji" in self.metrics:
-            result["aji"] = self.sum("intersection") / (self.sum("union") + epsilon)
+            result["aji"] = self.sum("intersection", metrics_data) / (self.sum("union", metrics_data) + epsilon)
 
         # dq
-        count_tp = self.sum("tp")
-        count_fp = self.sum("fp")
-        count_fn = self.sum("fn")
+        count_tp = self.sum("tp", metrics_data)
+        count_fp = self.sum("fp", metrics_data)
+        count_fn = self.sum("fn", metrics_data)
         result["dq"] = count_tp / (count_tp + (count_fp + count_fn) / 2)
 
         # sq
-        iou_arr = torch.cat([_["iou"] for _ in self.metric_data]).cpu().numpy()
-        tp_arr = torch.cat([_["tp"] for _ in self.metric_data]).cpu().numpy()
+        iou_arr = torch.cat([_["iou"] for _ in metrics_data]).cpu().numpy()
+        tp_arr = torch.cat([_["tp"] for _ in metrics_data]).cpu().numpy()
         result["sq"] = np.sum(iou_arr * tp_arr) / np.sum(tp_arr)
 
         # pq
@@ -448,10 +450,38 @@ class AggregatedMetrics:
 
         return result
 
-    def average(self, metric: str):
-        arr = torch.cat([_[metric] for _ in self.metric_data]).cpu().numpy()
+    def aggregate(self):
+        return self._aggregate(self.metric_data)
+
+    def aggregate_by_datasets(self):
+        names = set()
+        for name_list in self.dataset_names:
+            names = names | set(name_list)
+        names = list(names)
+
+        result = {}
+        for name in names:
+            metrics_data = []
+            for metric_dict, name_list in zip(self.metric_data, self.dataset_names):
+                check = np.array(name_list) == name
+                if not check.any():
+                    continue
+                metrics_data.append(
+                    {
+                        key: val[check] if val is not None else None
+                        for key, val in metric_dict.items()
+                    }
+                )
+            result[name] = self._aggregate(metrics_data)
+
+        return result
+
+    @staticmethod
+    def average(metric: str, metrics_data: List[dict]):
+        arr = torch.cat([_[metric] for _ in metrics_data]).cpu().numpy()
         return np.mean(arr)
 
-    def sum(self, metric: str):
-        arr = torch.cat([_[metric] for _ in self.metric_data]).cpu().numpy()
+    @staticmethod
+    def sum(metric: str, metrics_data: List[dict]):
+        arr = torch.cat([_[metric] for _ in metrics_data]).cpu().numpy()
         return np.sum(arr)

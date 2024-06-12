@@ -28,14 +28,14 @@ from utils import get_transform, calc_step, MaskPredictor
 
 class PseudoSchedular:
 
-    def __init__(self, schedular_dir: str, current_epoch: int, step: int,
-                 start_epoch: int, pseudo_weight_gr: float):
-        self._schedular_dir = schedular_dir
-        self._current_epoch = current_epoch
-        self._start_epoch = start_epoch
+    def __init__(self, schedular_dir: str, current_step: int, step: int,
+                 start_step: int, pseudo_weight_gr: float):
+        self.schedular_dir = schedular_dir
+        self.current_step = current_step
+        self.start_step = start_step
         self._step = step
-        self._pseudo_weight_gr = pseudo_weight_gr
-        self._schedular_path = os.path.join(self._schedular_dir, "schedular.json")
+        self.pseudo_weight_gr = pseudo_weight_gr
+        self._schedular_path = os.path.join(self.schedular_dir, "schedular.json")
 
         if os.path.exists(self._schedular_path):
             with open(self._schedular_path, "r") as f:
@@ -44,8 +44,8 @@ class PseudoSchedular:
             self._schedular_data = {"schedular": [], "skip": []}
 
         # update using init args
-        self._schedular_data["current_epoch"] = self._current_epoch
-        self._schedular_data["start_epoch"] = self._start_epoch
+        self._schedular_data["current_epoch"] = self.current_step
+        self._schedular_data["start_epoch"] = self.start_step
         self._schedular_data["step"] = self._step
 
     def _read(self):
@@ -59,34 +59,34 @@ class PseudoSchedular:
 
     def _update(self):
         schedular_data = self._read()
-        schedular_data["current_epoch"] = self._current_epoch
+        schedular_data["current_epoch"] = self.current_step
         schedular_data["step"] = self._step
         with open(self._schedular_path, "w") as f:
             json.dump(schedular_data, f, indent=2)
 
     @property
     def pseudo_weight(self):
-        return min(self._pseudo_weight_gr * (self._current_epoch - self._start_epoch + 1), 1)
+        return min(self.pseudo_weight_gr * (self.current_step - self.start_step + 1), 1)
 
     def step(self):
-        self._current_epoch += 1
+        self.current_step += 1
         self._update()
         return self
 
     def is_active(self):
         schedular_data = self._read()
-        if self._current_epoch in schedular_data["schedular"]:
+        if self.current_step in schedular_data["schedular"]:
             active = True
-        elif self._current_epoch < self._start_epoch:
+        elif self.current_step < self.start_step:
             active = False
-        elif self._current_epoch not in schedular_data["skip"]:
-            if self._start_epoch == 0:
-                if self._current_epoch % self._step == 0:
+        elif self.current_step not in schedular_data["skip"]:
+            if self.start_step == 0:
+                if self.current_step % self._step == 0:
                     active = True
                 else:
                     active = False
             else:
-                if self._current_epoch != 0 and self._current_epoch % self._step == 0:
+                if self.current_step != 0 and self.current_step % self._step == 0:
                     active = True
                 else:
                     active = False
