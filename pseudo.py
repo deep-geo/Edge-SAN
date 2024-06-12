@@ -97,7 +97,7 @@ class PseudoSchedular:
 
 @torch.no_grad()
 def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
-                    task_id: int = None):
+                    task_id: int = None, save_png_mask: bool = False):
     model.eval()
     mask_predictor = MaskPredictor(
         model=model,
@@ -137,22 +137,23 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
 
         basename = os.path.basename(path)[:-4]
         mask_path = os.path.join(pseudo_label_dir, f"{basename}.npy")
-        img_path = os.path.join(pseudo_label_dir, f"{basename}.png")
 
         # npy
         dst_arr = transform(image=mask)["image"]
         np.save(mask_path, dst_arr)
 
         # png
-        vals_uint16 = [_ for _ in np.unique(dst_arr) if _ != 0][:255]
-        dst_label_uint8 = np.zeros(shape=dst_arr.shape, dtype=np.uint8)
-        if len(vals_uint16) > 0:
-            random.shuffle(vals_uint16)
-            step = calc_step(len(vals_uint16))
-            for j, val in enumerate(vals_uint16):
-                dst_label_uint8[dst_arr == val] = 255 - j * step
+        if save_png_mask:
+            img_path = os.path.join(pseudo_label_dir, f"{basename}.png")
+            vals_uint16 = [_ for _ in np.unique(dst_arr) if _ != 0][:255]
+            dst_label_uint8 = np.zeros(shape=dst_arr.shape, dtype=np.uint8)
+            if len(vals_uint16) > 0:
+                random.shuffle(vals_uint16)
+                step = calc_step(len(vals_uint16))
+                for j, val in enumerate(vals_uint16):
+                    dst_label_uint8[dst_arr == val] = 255 - j * step
 
-        cv2.imwrite(img_path, dst_label_uint8)
+            cv2.imwrite(img_path, dst_label_uint8)
 
     split_dataset(data_root=pseudo_root, ext="png", test_size=0.0)
 
