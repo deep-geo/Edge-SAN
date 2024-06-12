@@ -325,8 +325,6 @@ def main(args):
         pseudo_data_dir = os.path.join(pseudo_root, "data")
         os.makedirs(pseudo_data_dir, exist_ok=True)
 
-        pseudo_split_paths = generate_pseudo_multiple(args, model, pseudo_root)
-
         pseudo_schedular = PseudoSchedular(
             schedular_dir=run_dir,
             current_epoch=0,
@@ -335,7 +333,9 @@ def main(args):
             pseudo_weight_gr=args.unsupervised_weight_gr
         )
 
-        if resume_epoch >= args.unsupervised_start_epoch:
+        if pseudo_schedular.is_active():
+            print("\nactivate pseudo, weight: ", pseudo_schedular.pseudo_weight)
+            pseudo_split_paths = generate_pseudo_multiple(args, model, pseudo_root)
             for pseudo_split_path in pseudo_split_paths:
                 train_dataset_pseudo = TrainingDataset(
                     split_paths=pseudo_split_path,
@@ -433,6 +433,7 @@ def main(args):
         if args.activate_unsupervised:
             wandb.log({"pseudo_weight": pseudo_schedular.pseudo_weight}, step=epoch)
             if pseudo_schedular.is_active():
+                print("\nactivate pseudo, weight: ", pseudo_schedular.pseudo_weight)
                 train_dataset = train_dataset_gt
                 print("\ngt dataset length: ", len(train_dataset))
                 pseudo_root = os.path.join(run_dir, "pseudo")
@@ -465,5 +466,6 @@ if __name__ == '__main__':
     args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
     args.activate_unsupervised = True
     args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CPM17/data"
+    # args.unsupervised_start_epoch = 1
 
     main(args)
