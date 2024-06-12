@@ -12,7 +12,7 @@ from segment_anything import sam_model_registry
 from torch import optim
 from torch.utils.data import DataLoader
 from DataLoader import TrainingDataset, TestingDataset, TrainingDatasetFolder, \
-    stack_dict_batched
+    TestingDatasetFolder, stack_dict_batched
 from utils import get_logger, generate_point, setting_prompt_none, save_masks, \
     postprocess_masks, to_device, prompt_and_decoder, MaskPredictor
 from loss import FocalDiceloss_IoULoss
@@ -40,8 +40,8 @@ def eval_model(args, model, test_loader):
     all_eval_metrics = []
 
     for i, batched_input in enumerate(tqdm(test_loader)):
-        # if i > 2:
-        #     break
+        if i > 5:
+            break
         batched_input = to_device(batched_input, args.device)
         dataset_names.append(batched_input["dataset_name"])
         ori_labels = batched_input["ori_label"]
@@ -284,9 +284,20 @@ def main(args):
     if args.data_root:
         train_dataset = train_dataset_gt = TrainingDatasetFolder(
             data_root=args.data_root,
+            train_size=1-args.test_size,
             point_num=1,
             mask_num=args.mask_num,
-            requires_name=False
+            requires_name=False,
+            random_seed=args.seed
+        )
+        test_dataset = TestingDatasetFolder(
+            data_root=args.data_root,
+            test_size=args.test_size,
+            requires_name=True,
+            point_num=args.point_num,
+            return_ori_mask=True,
+            prompt_path=args.prompt_path,
+            sample_rate=args.test_sample_rate
         )
     elif args.split_paths:
         train_dataset = train_dataset_gt = TrainingDataset(
@@ -296,8 +307,16 @@ def main(args):
             requires_name=False,
             is_pseudo=False
         )
+        test_dataset = TestingDataset(split_paths=args.split_paths,
+                                      requires_name=True,
+                                      point_num=args.point_num,
+                                      return_ori_mask=True,
+                                      prompt_path=args.prompt_path,
+                                      sample_rate=args.test_sample_rate)
     else:
         raise ValueError(f"No dataset provided!")
+
+    print("\ngt dataset length: ", len(train_dataset))
 
     # pseudo dataset
     pseudo_schedular = None
@@ -327,12 +346,8 @@ def main(args):
                 )
                 train_dataset += train_dataset_pseudo
 
-    test_dataset = TestingDataset(split_paths=args.split_paths,
-                                  requires_name=True,
-                                  point_num=args.point_num,
-                                  return_ori_mask=True,
-                                  prompt_path=args.prompt_path,
-                                  sample_rate=args.test_sample_rate)
+        print("\ngt & pseudo dataset length: ", len(train_dataset))
+
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
                               shuffle=True, num_workers=args.num_workers)
     test_loader = DataLoader(dataset=test_dataset, batch_size=args.batch_size,
@@ -419,6 +434,7 @@ def main(args):
             wandb.log({"pseudo_weight": pseudo_schedular.pseudo_weight}, step=epoch)
             if pseudo_schedular.is_active():
                 train_dataset = train_dataset_gt
+                print("\ngt dataset length: ", len(train_dataset))
                 pseudo_root = os.path.join(run_dir, "pseudo")
                 pseudo_split_paths = generate_pseudo_multiple(args, model, pseudo_root)
                 for pseudo_split_path in pseudo_split_paths:
@@ -430,6 +446,7 @@ def main(args):
                         is_pseudo=True
                     )
                     train_dataset += train_dataset_pseudo
+                print("\ngt & pseudo dataset length: ", len(train_dataset))
                 train_loader = DataLoader(train_dataset,
                                           batch_size=args.batch_size,
                                           shuffle=True,
@@ -442,9 +459,11 @@ if __name__ == '__main__':
     args = parse_train_args()
 
     args.encoder_adapter = True
-    # args.activate_unsupervised = True
-    args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
+    # args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
+    args.data_root = "/Users/zhaojq/Datasets/ALL_Multi"
+    args.test_size = 0.1
     args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
-    # args.unsupervised_dir = "/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/CoNIC/data"
+    args.activate_unsupervised = True
+    args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CPM17/data"
 
     main(args)
