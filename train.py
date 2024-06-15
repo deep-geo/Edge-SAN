@@ -464,6 +464,28 @@ def main(args):
         wandb.log(global_metrics_dict, step=global_step, commit=True)
         global_metrics_dict = {}
 
+        if args.data_root:
+            test_dataset = TestingDatasetFolder(
+                data_root=args.data_root,
+                test_size=args.test_size,
+                requires_name=True,
+                point_num=args.point_num,
+                return_ori_mask=True,
+                prompt_path=args.prompt_path,
+                sample_rate=args.test_sample_rate
+            )
+        elif args.split_paths:
+            test_dataset = TestingDataset(split_paths=args.split_paths,
+                                          requires_name=True,
+                                          point_num=args.point_num,
+                                          return_ori_mask=True,
+                                          prompt_path=args.prompt_path,
+                                          sample_rate=args.test_sample_rate)
+
+        test_loader = DataLoader(dataset=test_dataset,
+                                 batch_size=args.batch_size,
+                                 shuffle=False, num_workers=args.num_workers)
+
 
 if __name__ == '__main__':
     mp.set_start_method('spawn')

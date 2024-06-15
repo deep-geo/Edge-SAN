@@ -7,7 +7,7 @@ python train.py \
 --epochs 100000 \
 --batch_size 8 \
 --num_workers 8 \
---log_interval 5 \
+--log_interval 100 \
 --test_sample_rate 1.0 \
 --image_size 256 \
 --mask_num 5 \
