@@ -25,6 +25,9 @@ def parse_train_args():
         "--epochs", type=int, default=100000, help="number of epochs"
     )
     parser.add_argument(
+        "--log_interval", type=int, default=100, help="log frequency"
+    )
+    parser.add_argument(
         "--batch_size", type=int, default=8, help="train batch size"
     )
     parser.add_argument(
@@ -124,6 +127,9 @@ def parse_train_args():
     parser.add_argument(
         "--unsupervised_step", type=int, default=1,
         help="step to update unsupervised dataset"
+    )
+    parser.add_argument(
+        "--unsupervised_weight", type=float, default=1.0
     )
     parser.add_argument(
         "--unsupervised_weight_gr", type=float, default=0

@@ -25,6 +25,8 @@ import torch.multiprocessing as mp
 
 torch.set_default_dtype(torch.float32)
 max_num_chkpt = 3
+global_step = 0
+global_metrics_dict = {}
 
 
 @torch.no_grad()
@@ -120,18 +122,21 @@ def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
 
 
 def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
-                    pseudo_schedular):
+                    pseudo_schedular, test_loader):
+
+    global global_metrics_dict
+    global global_step
+
     train_loader_bar = tqdm(train_loader)
     train_losses = []
 
     pseudo_weights = None
 
-    # all_train_metrics = []
-
     nn = 0
-    for batch, batched_input in enumerate(train_loader_bar):
+    for i, batched_input in enumerate(train_loader_bar):
+        global_step += 1
         # nn += 1
-        # if nn > 2:
+        # if nn > 16:
         #     break
         batched_input = stack_dict_batched(batched_input)
         batched_input = to_device(batched_input, args.device)
@@ -220,17 +225,31 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
         train_loader_bar.set_postfix(train_loss=loss.item())
 
-        # seg_metrics = SegMetrics(args.metrics, masks, labels)
-        # all_train_metrics.append(seg_metrics.result())
-        # print("\ntrain seg_metrics: ", seg_metrics.result())
+        if global_step % args.log_interval == 0:
+            average_test_loss, test_metrics_overall, test_metrics_datasets = \
+                eval_model(args, model, test_loader, output_dataset_metrics=True)
 
-    # train_metrics = AggregatedMetrics(args.metrics, all_train_metrics).aggregate()
-    # print("\naggregated train_metrics: ", train_metrics)
+            for metric in args.metrics:
+                global_metrics_dict[f"Overall/{metric}"] = test_metrics_overall.get(metric, None)
+                if test_metrics_datasets:
+                    for dataset_name in test_metrics_datasets.keys():
+                        global_metrics_dict[f"{dataset_name}/{metric}"] = \
+                            test_metrics_datasets[dataset_name].get(metric, None)
 
-    return train_losses
+            average_train_loss = np.mean(train_losses)
+            global_metrics_dict["Loss/train"] = average_train_loss
+            global_metrics_dict["Loss/test"] = average_test_loss
+
+            wandb.log(global_metrics_dict, step=global_step, commit=True)
+
+            global_metrics_dict = {}
+            train_losses = []
 
 
 def main(args):
+
+    global global_metrics_dict
+    global global_step
 
     model = sam_model_registry[args.model_type](args).to(args.device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -337,14 +356,16 @@ def main(args):
             current_step=0,
             step=args.unsupervised_step if args.unsupervised_step else 1,
             start_step=args.unsupervised_start_epoch,
+            pseudo_weight=args.unsupervised_weight,
             pseudo_weight_gr=args.unsupervised_weight_gr
         )
 
         if pseudo_schedular.is_active():
             print(f"\nactivate pseudo: current step {pseudo_schedular.current_step}, "
                   f"weight {pseudo_schedular.pseudo_weight}")
-            pseudo_split_paths = generate_pseudo_multiple(
-                args, model, pseudo_root, pseudo_schedular.sample_rate)
+            pseudo_split_paths, pseudo_info = generate_pseudo_multiple(
+                args, model, pseudo_root, pseudo_schedular.sample_rate
+            )
             for pseudo_split_path in pseudo_split_paths:
                 train_dataset_pseudo = TrainingDataset(
                     split_paths=pseudo_split_path,
@@ -354,6 +375,9 @@ def main(args):
                     is_pseudo=True
                 )
                 train_dataset += train_dataset_pseudo
+
+            for key, val in pseudo_info.items():
+                global_metrics_dict[f"Pseudo/{key}"] = val
 
             print("\ngt & pseudo dataset length: ", len(train_dataset))
 
@@ -375,87 +399,38 @@ def main(args):
     average_test_loss, test_metrics_overall, test_metrics_datasets = \
         eval_model(args, model, test_loader, output_dataset_metrics=True)
 
-    metrics_dict = {}
     for metric in args.metrics:
-        metrics_dict[f"Overall/{metric}"] = test_metrics_overall.get(metric, None)
+        global_metrics_dict[f"Overall/{metric}"] = test_metrics_overall.get(metric, None)
         if test_metrics_datasets:
             for dataset_name in test_metrics_datasets.keys():
-                metrics_dict[f"{dataset_name}/{metric}"] = \
+                global_metrics_dict[f"{dataset_name}/{metric}"] = \
                     test_metrics_datasets[dataset_name].get(metric, None)
 
-    metrics_dict["Loss/train"] = 0.0
-    metrics_dict["Loss/test"] = 0.0
+    global_metrics_dict["Loss/train"] = 0.0
+    global_metrics_dict["Loss/test"] = 0.0
 
-    wandb.log(metrics_dict)
+    # wandb.log(global_metrics_dict, step=global_step, commit=True)
+    wandb.log(global_metrics_dict, step=global_step, commit=True)
+    global_metrics_dict = {}
     
     for epoch in range(resume_epoch, args.epochs):
         print(f"\nTrain epoch {epoch}...")
-
-        metrics_dict = {}
 
         model.train()
 
         if pseudo_schedular is not None:
             pseudo_schedular.step()
 
-        train_losses = train_one_epoch(
+        train_one_epoch(
             args, model, optimizer, train_loader, epoch, criterion,
-            pseudo_schedular
+            pseudo_schedular, test_loader
         )
 
         if args.lr_scheduler is not None:
             scheduler.step()
 
-        average_train_loss = np.mean(train_losses)
-
-        print("\nEvaluate model...")
-        average_test_loss, test_metrics_overall, test_metrics_datasets = \
-            eval_model(args, model, test_loader, output_dataset_metrics=True)
-
-        metrics_dict = {}
-        for metric in args.metrics:
-            metrics_dict[f"Overall/{metric}"] = test_metrics_overall.get(metric, None)
-            if test_metrics_datasets:
-                for dataset_name in test_metrics_datasets.keys():
-                    metrics_dict[f"{dataset_name}/{metric}"] = \
-                        test_metrics_datasets[dataset_name].get(metric, None)
-
-        metrics_dict["Loss/train"] = average_train_loss
-        metrics_dict["Loss/test"] = average_test_loss
-
-        lr = scheduler.get_last_lr()[
-            0] if args.lr_scheduler is not None else args.lr
-        loggers.info(
-            f"epoch: {epoch + 1}, lr: {lr}, train-loss: {average_train_loss:.4f}, "
-            f"test-loss: {average_test_loss:.4f}, metrics: {metrics_dict}"
-        )
-
-        if average_test_loss < best_loss:
-            # clean redundant checkpoints
-            chkpts = sorted(
-                glob.glob(os.path.join(run_dir, "*.pth")),
-                key=lambda p: float(
-                    re.search(r"test-loss(\d+\.\d+)", os.path.basename(p)).group(1))
-            )
-            for chkpt in chkpts[max_num_chkpt:]:
-                os.remove(chkpt)
-
-            # save the latest checkpoint
-            best_loss = average_test_loss
-            save_path = os.path.join(
-                run_dir,
-                f"epoch{epoch + 1:04d}_test-loss{average_test_loss:.4f}_sam.pth"
-            )
-            state = {'model': model.float().state_dict(),
-                     'optimizer': optimizer,
-                     'train-loss': average_train_loss, 'test-loss': average_test_loss,
-                     'epoch': epoch + 1}
-            torch.save(state, save_path)
-
         if args.activate_unsupervised:
-            metrics_dict["pseudo_weight"] = pseudo_schedular.pseudo_weight
-
-        wandb.log(metrics_dict)
+            global_metrics_dict["Pseudo/weight"] = pseudo_schedular.pseudo_weight
 
         if args.activate_unsupervised:
             if pseudo_schedular.is_active():
@@ -464,8 +439,9 @@ def main(args):
                 train_dataset = train_dataset_gt
                 print("\ngt dataset length: ", len(train_dataset))
                 pseudo_root = os.path.join(run_dir, "pseudo")
-                pseudo_split_paths = generate_pseudo_multiple(
-                    args, model, pseudo_root, pseudo_schedular.sample_rate)
+                pseudo_split_paths, pseudo_info = generate_pseudo_multiple(
+                    args, model, pseudo_root, pseudo_schedular.sample_rate
+                )
                 for pseudo_split_path in pseudo_split_paths:
                     train_dataset_pseudo = TrainingDataset(
                         split_paths=pseudo_split_path,
@@ -475,11 +451,18 @@ def main(args):
                         is_pseudo=True
                     )
                     train_dataset += train_dataset_pseudo
+
+                for key, val in pseudo_info.items():
+                    global_metrics_dict[f"Pseudo/{key}"] = val
+
                 print("\ngt & pseudo dataset length: ", len(train_dataset))
                 train_loader = DataLoader(train_dataset,
                                           batch_size=args.batch_size,
                                           shuffle=True,
                                           num_workers=args.num_workers)
+
+        wandb.log(global_metrics_dict, step=global_step, commit=True)
+        global_metrics_dict = {}
 
 
 if __name__ == '__main__':
@@ -494,11 +477,14 @@ if __name__ == '__main__':
     # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
     # args.activate_unsupervised = True
     # args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CoNIC/data"
+    # args.log_interval = 5
+    # args.unsupervised_weight = 0.1
+    # # args.unsupervised_weight_gr = 0.1
     # args.batch_size = 4
     # args.num_workers = 2
     # points_per_side = 24
     # args.points_per_batch = 64
     # args.unsupervised_start_epoch = 1
-    # args.unsupervised_sample_rates = [0.01, 0.02, 0.03]
+    # args.unsupervised_sample_rates = [0.01, 0.02, 0.03, 0.04, 0.05]
 
     main(args)

@@ -31,12 +31,13 @@ class PseudoSchedular:
 
     def __init__(self, schedular_dir: str, sample_rates: List[float],
                  current_step: int, step: int, start_step: int,
-                 pseudo_weight_gr: float):
+                 pseudo_weight: float, pseudo_weight_gr: float = 0.0):
         self.schedular_dir = schedular_dir
         self.sample_rates = sample_rates
         self.current_step = current_step
         self.start_step = start_step
         self._step = step
+        self._pseudo_weight = pseudo_weight
         self.pseudo_weight_gr = pseudo_weight_gr
         self._schedular_path = os.path.join(self.schedular_dir, "schedular.json")
 
@@ -69,7 +70,7 @@ class PseudoSchedular:
 
     @property
     def pseudo_weight(self):
-        return max(0, min(self.pseudo_weight_gr * (self.current_step - self.start_step + 1), 1))
+        return max(0, min(self._pseudo_weight + self.pseudo_weight_gr * (self.current_step - self.start_step + 1), 1))
 
     @property
     def sample_rate(self):
@@ -135,7 +136,9 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
     if task_id is not None:
         desc = f"{desc}, task_id: {task_id}"
 
+    infos = []
     for path in tqdm(img_paths, desc=desc):
+
         image = cv2.imread(path)
         if image is None:
             print(f"Could not load '{path}' as an image, skipping...")
@@ -171,6 +174,11 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
 
             cv2.imwrite(img_path, dst_label_uint8)
 
+        infos.append({"basename": basename, "instances": len(np.unique(mask)) - 1})
+
+    with open(os.path.join(pseudo_root, "info.json"), "w") as f:
+        json.dump(infos, f)
+
     split_dataset(data_root=pseudo_root, ext="png", test_size=0.0, split_path=split_path)
 
 
@@ -190,6 +198,23 @@ def split_list(lst, num_parts):
     return result
 
 
+def read_pseudo_info(info_paths: List[str]) -> dict:
+
+    info = {"total": 0, "empty": 0, "instances": 0}
+
+    for path in info_paths:
+        with open(path) as f:
+            data = json.load(f)
+            info["total"] += len(data)
+            info["empty"] += sum([1 for _ in data if _["instances"] == 0])
+            info["instances"] += sum([_["instances"] for _ in data])
+
+    info["miss_rate"] = info["empty"] / info["total"]
+    info["average_instances"] = info["instances"] / info["total"]
+
+    return info
+
+
 @torch.no_grad()
 def generate_pseudo_multiple(args, model, pseudo_root: str, sample_rate: float = 1.0):
 
@@ -203,10 +228,16 @@ def generate_pseudo_multiple(args, model, pseudo_root: str, sample_rate: float =
 
     processes = []
     split_paths = []
+    pseudo_info_paths = []
     for i, task in enumerate(tasks):
         pseudo_dir = os.path.join(pseudo_root, f"split_{i}")
+
         split_path = os.path.join(pseudo_dir, "split.json")
         split_paths.append(split_path)
+
+        pseudo_info_path = os.path.join(pseudo_dir, "info.json")
+        pseudo_info_paths.append(pseudo_info_path)
+
         p = mp.Process(target=generate_pseudo,
                        args=(args, model, pseudo_dir, task, i, False, split_path))
         p.start()
@@ -215,4 +246,6 @@ def generate_pseudo_multiple(args, model, pseudo_root: str, sample_rate: float =
     for p in processes:
         p.join()
 
-    return split_paths
+    pseudo_info = read_pseudo_info(pseudo_info_paths)
+
+    return split_paths, pseudo_info

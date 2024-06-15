@@ -7,6 +7,7 @@ python train.py \
 --epochs 100000 \
 --batch_size 8 \
 --num_workers 8 \
+--log_interval 5 \
 --test_sample_rate 1.0 \
 --image_size 256 \
 --mask_num 5 \
@@ -27,8 +28,9 @@ python train.py \
 --unsupervised_dir "/root/autodl-tmp/datasets/SAM_nuclei/<unsupervised_root>" \
 --unsupervised_start_epoch 0 \
 --unsupervised_step 1 \
---unsupervised_weight_gr 0.1 \
---unsupervised_sample_rates [0.1, 0.2, 0.3] \
+--unsupervised_weight 1.0 \
+--unsupervised_weight_gr 0.0 \
+--unsupervised_sample_rates 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 \
 --unsupervised_num_processes 2 \
 --pred_iou_thresh 0.88 \
 --stability_score_thresh 0.95 \
