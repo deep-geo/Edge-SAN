@@ -441,7 +441,7 @@ class AggregatedMetrics:
         # sq
         iou_arr = torch.cat([_["iou"] for _ in metrics_data]).cpu().numpy()
         tp_arr = torch.cat([_["tp"] for _ in metrics_data]).cpu().numpy()
-        result["sq"] = np.sum(iou_arr * tp_arr) / np.sum(tp_arr)
+        result["sq"] = np.sum(iou_arr * tp_arr) / (np.sum(tp_arr) + epsilon)
 
         # pq
         result["pq"] = result["dq"] * result["sq"]
