@@ -13,6 +13,7 @@ Schedular json file:
 import glob
 import math
 import os
+import shutil
 import json
 import random
 import cv2
@@ -28,9 +29,11 @@ from utils import get_transform, calc_step, MaskPredictor
 
 class PseudoSchedular:
 
-    def __init__(self, schedular_dir: str, current_step: int, step: int,
-                 start_step: int, pseudo_weight_gr: float):
+    def __init__(self, schedular_dir: str, sample_rates: List[float],
+                 current_step: int, step: int, start_step: int,
+                 pseudo_weight_gr: float):
         self.schedular_dir = schedular_dir
+        self.sample_rates = sample_rates
         self.current_step = current_step
         self.start_step = start_step
         self._step = step
@@ -66,7 +69,18 @@ class PseudoSchedular:
 
     @property
     def pseudo_weight(self):
-        return min(self.pseudo_weight_gr * (self.current_step - self.start_step + 1), 1)
+        return max(0, min(self.pseudo_weight_gr * (self.current_step - self.start_step + 1), 1))
+
+    @property
+    def sample_rate(self):
+        idx = self.current_step - self.start_step
+        if idx < 0:
+            rate = 0
+        elif idx < len(self.sample_rates):
+            rate = self.sample_rates[idx]
+        else:
+            rate = self.sample_rates[-1]
+        return rate
 
     def step(self):
         self.current_step += 1
@@ -97,7 +111,8 @@ class PseudoSchedular:
 
 @torch.no_grad()
 def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
-                    task_id: int = None, save_png_mask: bool = False):
+                    task_id: int = None, save_png_mask: bool = False,
+                    split_path: str = None):
     model.eval()
     mask_predictor = MaskPredictor(
         model=model,
@@ -109,11 +124,12 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
     )
     pseudo_data_dir = os.path.join(pseudo_root, "data")
     pseudo_label_dir = os.path.join(pseudo_root, "label")
-    os.makedirs(pseudo_data_dir, exist_ok=True)
-    os.makedirs(pseudo_label_dir, exist_ok=True)
-
-    if not img_paths:
-        img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
+    if os.path.exists(pseudo_data_dir):
+        shutil.rmtree(pseudo_data_dir)
+    if os.path.exists(pseudo_label_dir):
+        shutil.rmtree(pseudo_label_dir)
+    os.makedirs(pseudo_data_dir)
+    os.makedirs(pseudo_label_dir)
 
     desc = "Generating pseudo masks"
     if task_id is not None:
@@ -155,7 +171,7 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
 
             cv2.imwrite(img_path, dst_label_uint8)
 
-    split_dataset(data_root=pseudo_root, ext="png", test_size=0.0)
+    split_dataset(data_root=pseudo_root, ext="png", test_size=0.0, split_path=split_path)
 
 
 def split_list(lst, num_parts):
@@ -175,17 +191,24 @@ def split_list(lst, num_parts):
 
 
 @torch.no_grad()
-def generate_pseudo_multiple(args, model, pseudo_root: str):
+def generate_pseudo_multiple(args, model, pseudo_root: str, sample_rate: float = 1.0):
+
+    assert 0 < sample_rate <= 1.0, "wrong sample_rate!"
+
     img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
+    print(f"\noriginal pseudo number: {len(img_paths)}")
+    img_paths = random.choices(img_paths, k=int(len(img_paths) * sample_rate))
+    print(f"\npseudo sample_rate = {sample_rate}, actual pseudo sample number: {len(img_paths)}")
     tasks = split_list(img_paths, args.unsupervised_num_processes)
-    # print("task lengths: ", [len(_) for _ in tasks])
 
     processes = []
     split_paths = []
     for i, task in enumerate(tasks):
         pseudo_dir = os.path.join(pseudo_root, f"split_{i}")
-        split_paths.append(os.path.join(pseudo_dir, "split.json"))
-        p = mp.Process(target=generate_pseudo, args=(args, model, pseudo_dir, task, i))
+        split_path = os.path.join(pseudo_dir, "split.json")
+        split_paths.append(split_path)
+        p = mp.Process(target=generate_pseudo,
+                       args=(args, model, pseudo_dir, task, i, False, split_path))
         p.start()
         processes.append(p)
 

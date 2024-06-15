@@ -28,6 +28,7 @@ python train.py \
 --unsupervised_start_epoch 0 \
 --unsupervised_step 1 \
 --unsupervised_weight_gr 0.1 \
+--unsupervised_sample_rates [0.1, 0.2, 0.3] \
 --unsupervised_num_processes 2 \
 --pred_iou_thresh 0.88 \
 --stability_score_thresh 0.95 \

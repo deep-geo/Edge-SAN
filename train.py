@@ -40,7 +40,7 @@ def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
     all_eval_metrics = []
 
     for i, batched_input in enumerate(tqdm(test_loader)):
-        # if i > 8:
+        # if i > 3:
         #     break
         batched_input = to_device(batched_input, args.device)
         dataset_names.append(batched_input["dataset_name"])
@@ -164,7 +164,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         masks, low_res_masks, iou_predictions = prompt_and_decoder(
             args, batched_input, model, image_embeddings, decoder_iter=False)
 
-        if args.activate_unsupervised:
+        if args.activate_unsupervised and args.unsupervised_weight_gr:
             pseudos = (batched_input["pseudo"].unsqueeze(1).
                        repeat(1, args.mask_num).reshape(-1))
             pseudo_weights = torch.ones(size=pseudos.shape, device=args.device)
@@ -333,6 +333,7 @@ def main(args):
 
         pseudo_schedular = PseudoSchedular(
             schedular_dir=run_dir,
+            sample_rates=args.unsupervised_sample_rates,
             current_step=0,
             step=args.unsupervised_step if args.unsupervised_step else 1,
             start_step=args.unsupervised_start_epoch,
@@ -342,7 +343,8 @@ def main(args):
         if pseudo_schedular.is_active():
             print(f"\nactivate pseudo: current step {pseudo_schedular.current_step}, "
                   f"weight {pseudo_schedular.pseudo_weight}")
-            pseudo_split_paths = generate_pseudo_multiple(args, model, pseudo_root)
+            pseudo_split_paths = generate_pseudo_multiple(
+                args, model, pseudo_root, pseudo_schedular.sample_rate)
             for pseudo_split_path in pseudo_split_paths:
                 train_dataset_pseudo = TrainingDataset(
                     split_paths=pseudo_split_path,
@@ -462,7 +464,8 @@ def main(args):
                 train_dataset = train_dataset_gt
                 print("\ngt dataset length: ", len(train_dataset))
                 pseudo_root = os.path.join(run_dir, "pseudo")
-                pseudo_split_paths = generate_pseudo_multiple(args, model, pseudo_root)
+                pseudo_split_paths = generate_pseudo_multiple(
+                    args, model, pseudo_root, pseudo_schedular.sample_rate)
                 for pseudo_split_path in pseudo_split_paths:
                     train_dataset_pseudo = TrainingDataset(
                         split_paths=pseudo_split_path,
@@ -490,11 +493,12 @@ if __name__ == '__main__':
     # args.test_size = 0.1
     # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
     # args.activate_unsupervised = True
-    # args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CPM17/data"
+    # args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CoNIC/data"
     # args.batch_size = 4
     # args.num_workers = 2
     # points_per_side = 24
     # args.points_per_batch = 64
     # args.unsupervised_start_epoch = 1
+    # args.unsupervised_sample_rates = [0.01, 0.02, 0.03]
 
     main(args)

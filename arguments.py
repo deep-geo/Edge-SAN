@@ -118,11 +118,15 @@ def parse_train_args():
         help="epoch to start generating unsupervised dataset"
     )
     parser.add_argument(
+        "--unsupervised_sample_rates",
+        nargs='+', type=float, default=[1.0]
+    )
+    parser.add_argument(
         "--unsupervised_step", type=int, default=1,
         help="step to update unsupervised dataset"
     )
     parser.add_argument(
-        "--unsupervised_weight_gr", type=float, default=0.1
+        "--unsupervised_weight_gr", type=float, default=0
     )
     parser.add_argument(
         "--pred_iou_thresh", type=float, default=0.88,
