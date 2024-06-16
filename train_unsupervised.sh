@@ -26,7 +26,7 @@ python train.py \
 --multimask \
 --activate_unsupervised \
 --unsupervised_dir "/root/autodl-tmp/datasets/SAM_nuclei/<unsupervised_root>" \
---unsupervised_start_epoch 0 \
+--unsupervised_start_epoch 1 \
 --unsupervised_step 1 \
 --unsupervised_weight 1.0 \
 --unsupervised_weight_gr 0.0 \
