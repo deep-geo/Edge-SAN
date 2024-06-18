@@ -287,18 +287,17 @@ def generate_pseudo(args, model, img_paths: List[str], pseudo_root: str,
         write_info(info_path, info, lock)
 
 
-def read_pseudo_info(info_paths: List[str]) -> dict:
+def read_pseudo_info(info_path: str) -> dict:
 
     info = {"total": 0, "empty": 0, "instances": 0}
 
-    for path in info_paths:
-        with open(path) as f:
-            data = json.load(f)
-            info["total"] += len(data)
-            info["empty"] += sum([1 for _ in data if _["instances"] == 0])
-            info["instances"] += sum([_["instances"] for _ in data])
+    with open(info_path) as f:
+        data = json.load(f)
+        info["total"] += len(data)
+        info["empty"] += sum([1 for _ in data if _["instances"] == 0])
+        info["instances"] += sum([_["instances"] for _ in data])
 
-    info["miss_rate"] = info["empty"] / info["total"]
+    info["miss_rate"] = info["empty"] / info["total"] if info["total"] else 0.0
     info["average_instances"] = info["instances"] / info["total"]
 
     return info
@@ -325,7 +324,6 @@ def generate_pseudo_multiple(args, model, pseudo_root: str):
     n_save = 100
 
     processes = []
-    pseudo_info_paths = []
     for task in tasks:
         p = mp.Process(
             target=generate_pseudo,
@@ -341,7 +339,7 @@ def generate_pseudo_multiple(args, model, pseudo_root: str):
     for p in processes:
         p.join()
 
-    pseudo_info = read_pseudo_info(pseudo_info_paths)
+    pseudo_info = read_pseudo_info(info_path)
 
     split_path = os.path.join(pseudo_root, "split.json")
     split_dataset(data_root=pseudo_root, ext="png", test_size=0.0,
