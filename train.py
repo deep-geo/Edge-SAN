@@ -133,7 +133,8 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
     print("len(train_loader.batch_sampler) = ", len(train_loader.batch_sampler))
 
-    pbar = tqdm(total=len(train_loader.batch_sampler), desc="Training")
+    # pbar = tqdm(total=len(train_loader.batch_sampler), desc="Training")
+    pbar = tqdm(total=len(train_loader), desc="Training")
 
     # train_loader_bar = tqdm(train_loader)
     train_losses = []
