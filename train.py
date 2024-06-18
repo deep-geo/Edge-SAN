@@ -193,7 +193,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
         optimizer.step()
         optimizer.zero_grad()
-        if pseudo_schedular is not None:
+        if pseudo_schedular is not None and pseudo_schedular.is_active():
             pseudo_schedular.step(update_epoch=False)
 
         point_num = random.choice(args.point_list)
