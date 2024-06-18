@@ -257,7 +257,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
             if pseudo_schedular.is_active():
                 pseudo_split_path, pseudo_info = generate_pseudo_multiple(
-                    args, model, pseudo_root, pseudo_schedular.sample_rate
+                    args, model, pseudo_root
                 )
                 for key, val in pseudo_info.items():
                     global_metrics_dict[f"Pseudo/{key}"] = val
@@ -395,7 +395,7 @@ def main(args):
             print(f"\nactivate pseudo: current step {pseudo_schedular.current_epoch}, "
                   f"weight {pseudo_schedular.pseudo_weight}")
             pseudo_split_path, pseudo_info = generate_pseudo_multiple(
-                args, model, pseudo_root, pseudo_schedular.sample_rate
+                args, model, pseudo_root
             )
             train_set_pseudo = TrainingDataset(
                 split_paths=pseudo_split_path,
@@ -480,7 +480,7 @@ def main(args):
                       f"weight {pseudo_schedular.pseudo_weight}")
                 pseudo_root = os.path.join(run_dir, "pseudo")
                 pseudo_split_path, pseudo_info = generate_pseudo_multiple(
-                    args, model, pseudo_root, pseudo_schedular.sample_rate
+                    args, model, pseudo_root
                 )
                 train_set_pseudo = TrainingDataset(
                     split_paths=pseudo_split_path,
