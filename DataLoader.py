@@ -11,7 +11,7 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from tqdm import tqdm
 from utils import get_boxes_from_mask, init_point_sampling, get_edge_points_from_mask
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader, Sampler
 from preprocess.split_dataset import split_dataset
 
 
@@ -358,25 +358,6 @@ class TestingDatasetFolder(TestingDataset, DatasetFolderMixin):
             prompt_path=prompt_path, sample_rate=sample_rate
         )
 
-    # def read_data(self):
-    #     image_paths = []
-    #     label_paths = []
-    #
-    #     data_dir = os.path.join(self.data_root, "data")
-    #     label_dir = os.path.join(self.data_root, "label")
-    #     print(f"\nRead test data from: {self.data_root}")
-    #     data_paths = glob.glob(os.path.join(data_dir, "*.png"))
-    #     for data_path in tqdm(data_paths):
-    #         label_name = os.path.basename(data_path)[:-4] + ".npy"
-    #         label_path = os.path.join(label_dir, label_name)
-    #         label = np.load(label_path)
-    #         vals = sorted([val for val in np.unique(label) if val != 0])
-    #         for val in vals:
-    #             image_paths.append(data_path)
-    #             label_paths.append((val, label_path))
-    #
-    #     return image_paths, label_paths
-
 
 class TrainingDatasetFolder(TrainingDataset, DatasetFolderMixin):
 
@@ -394,46 +375,6 @@ class TrainingDatasetFolder(TrainingDataset, DatasetFolderMixin):
             point_num=point_num, mask_num=mask_num,
             edge_point_num=edge_point_num, is_pseudo=False
         )
-
-    # def is_dataset_dir(self, dir_path: str) -> bool:
-    #     return os.path.exists(os.path.join(dir_path, "data")) and \
-    #            os.path.exists(os.path.join(dir_path, "label"))
-    #
-    # def get_split_path(self, dir_path: str) -> str:
-    #     return os.path.join(
-    #         dir_path,
-    #         f"split_seed-{self.random_seed}_test_size-{1-self.train_size}.json"
-    #     )
-
-    # def get_split_paths(self):
-    #     split_paths = []
-    #     if self.is_dataset_dir(self.data_root):
-    #         split_path = self.get_split_path(self.data_root)
-    #         if not os.path.exists(split_path):
-    #             split_dataset(
-    #                 self.data_root,
-    #                 ext="png",
-    #                 test_size=1-self.train_size,
-    #                 seed=self.random_seed,
-    #                 split_path=split_path
-    #             )
-    #         split_paths.append(split_path)
-    #     else:
-    #         for name in os.listdir(self.data_root):
-    #             sub_dir_path = os.path.join(self.data_root, name)
-    #             if os.path.isdir(sub_dir_path):
-    #                 split_path = self.get_split_path(sub_dir_path)
-    #                 if not os.path.exists(split_path):
-    #                     split_dataset(
-    #                         self.data_root,
-    #                         ext="png",
-    #                         test_size=1 - self.train_size,
-    #                         seed=self.random_seed,
-    #                         split_path=split_path
-    #                     )
-    #                 split_paths.append(split_path)
-    #
-    #     return split_paths
 
 
 def find_overlapping_edges(label):
@@ -472,3 +413,65 @@ def find_overlapping_edges(label):
             overlap_edges.append([start_point, middle_point, end_point])
 
     return np.array(overlap_edges, dtype=np.float32)
+
+
+class CombineBatchSampler(Sampler):
+
+    def __init__(self, gt_dataset_len: int, pseudo_dataset_len: int,
+                 batch_size: int, sample_rate: float, drop_last: bool = False):
+        self.gt_dataset_len = gt_dataset_len
+        self.pseudo_dataset_len = pseudo_dataset_len
+        self.batch_size = batch_size
+        assert 0.0 <= sample_rate <= 1.0
+        self.sample_rate = sample_rate
+        self.drop_last = drop_last
+
+    def __iter__(self):
+        indices_gt = list(range(self.gt_dataset_len))
+        indices_pseudo = list(range(self.gt_dataset_len,
+                              self.gt_dataset_len + self.pseudo_dataset_len))
+
+        random.shuffle(indices_gt)
+        random.shuffle(indices_pseudo)
+
+        iter0 = iter(indices_gt)
+        iter1 = iter(indices_pseudo)
+
+        batch = []
+        while True:
+            if random.random() < self.sample_rate:
+                try:
+                    idx = next(iter1)
+                except StopIteration:
+                    if self.sample_rate == 1.0:
+                        break
+                    else:
+                        random.shuffle(indices_pseudo)
+                        iter1 = iter(indices_pseudo)
+            else:
+                try:
+                    idx = next(iter0)
+                except StopIteration:
+                    if self.sample_rate < 1.0:
+                        break
+                    else:
+                        continue
+
+            batch.append(idx)
+            if len(batch) == self.batch_size:
+                yield batch
+                batch = []
+
+        if len(batch) > 0 and not self.drop_last:
+            yield batch
+
+    def set_sample_rate(self, sample_rate: float):
+        self.sample_rate = sample_rate
+
+    def __len__(self):
+        if self.drop_last:
+            return (self.gt_dataset_len + self.pseudo_dataset_len) // self.batch_size
+        else:
+            return (self.gt_dataset_len + self.pseudo_dataset_len + self.batch_size - 1) // self.batch_size
+
+

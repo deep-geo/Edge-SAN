@@ -121,8 +121,20 @@ def parse_train_args():
         help="epoch to start generating unsupervised dataset"
     )
     parser.add_argument(
-        "--unsupervised_sample_rates",
-        nargs='+', type=float, default=[1.0]
+        "--unsupervised_initial_sample_rate",
+        type=float, default=0.1
+    )
+    parser.add_argument(
+        "--unsupervised_sample_rate_delta",
+        type=float, default=0.1
+    )
+    parser.add_argument(
+        "--unsupervised_focused_metric",
+        type=str, default=None, help="focused metric to adjust sample rate"
+    )
+    parser.add_argument(
+        "--unsupervised_metric_delta_threshold",
+        type=float, default=0.01
     )
     parser.add_argument(
         "--unsupervised_step", type=int, default=1,

@@ -11,7 +11,7 @@ Schedular json file:
 
 """
 import glob
-import math
+import time
 import os
 import shutil
 import json
@@ -29,14 +29,28 @@ from utils import get_transform, calc_step, MaskPredictor
 
 class PseudoSchedular:
 
-    def __init__(self, schedular_dir: str, sample_rates: List[float],
-                 current_step: int, step: int, start_step: int,
-                 pseudo_weight: float, pseudo_weight_gr: float = 0.0):
+    def __init__(self, schedular_dir: str, focused_metric: str,
+                 initial_sample_rate: float, sample_rate_delta: float,
+                 metric_delta_threshold: float, current_epoch: int, step: int,
+                 start_epoch: int, pseudo_weight: float,
+                 pseudo_weight_gr: float = 0.0):
         self.schedular_dir = schedular_dir
-        self.sample_rates = sample_rates
-        self.current_step = current_step
-        self.start_step = start_step
+        self.focused_metric = focused_metric
+        self._sample_rates = {
+            "initial": {"step": 0, "value": initial_sample_rate},
+            "last": {"step": None, "value": None},
+            "current": {"step": None, "value": None},
+        }
+        self.sample_rate_delta = sample_rate_delta
+        self.metric_delta_threshold = metric_delta_threshold
+        self.metric_data = {
+            "last": {"step": None, "value": None},
+            "current": {"step": None, "value": None}
+        }
+        self.current_epoch = current_epoch
+        self.start_epoch = start_epoch
         self._step = step
+        self._current_step = 0
         self._pseudo_weight = pseudo_weight
         self.pseudo_weight_gr = pseudo_weight_gr
         self._schedular_path = os.path.join(self.schedular_dir, "schedular.json")
@@ -48,8 +62,8 @@ class PseudoSchedular:
             self._schedular_data = {"schedular": [], "skip": []}
 
         # update using init args
-        self._schedular_data["current_epoch"] = self.current_step
-        self._schedular_data["start_epoch"] = self.start_step
+        self._schedular_data["current_epoch"] = self.current_epoch
+        self._schedular_data["start_epoch"] = self.start_epoch
         self._schedular_data["step"] = self._step
 
     def _read(self):
@@ -63,45 +77,74 @@ class PseudoSchedular:
 
     def _update(self):
         schedular_data = self._read()
-        schedular_data["current_epoch"] = self.current_step
+        schedular_data["current_epoch"] = self.current_epoch
         schedular_data["step"] = self._step
         with open(self._schedular_path, "w") as f:
             json.dump(schedular_data, f, indent=2)
 
     @property
     def pseudo_weight(self):
-        return max(0, min(self._pseudo_weight + self.pseudo_weight_gr * (self.current_step - self.start_step + 1), 1))
+        return max(0, min(self._pseudo_weight + self.pseudo_weight_gr * (self.current_epoch - self.start_epoch + 1), 1))
 
     @property
     def sample_rate(self):
-        idx = self.current_step - self.start_step
-        if idx < 0:
-            rate = 0
-        elif idx < len(self.sample_rates):
-            rate = self.sample_rates[idx]
-        else:
-            rate = self.sample_rates[-1]
-        return rate
+        if not self.is_active():
+            return 0.0
 
-    def step(self):
-        self.current_step += 1
+        if self._current_step != self._sample_rates["current"]["step"]:
+            last_val = self.metric_data["last"].get("value") or 0.0
+            current_val = self.metric_data["current"].get("value") or 0.0
+            delta = current_val - last_val
+
+            if delta > self.metric_delta_threshold:
+                delta_sample_rate = self.sample_rate_delta
+            elif delta <= self.metric_delta_threshold:
+                delta_sample_rate = -1 * self.sample_rate_delta
+            else:
+                delta_sample_rate = 0
+
+            initial_rate = self._sample_rates["initial"]["value"]
+            last_sample_rate = self._sample_rates["last"].get("value") or initial_rate
+            sample_rate = last_sample_rate + delta_sample_rate
+
+            self._sample_rates["last"]["step"] = self._sample_rates["current"]["step"]
+            self._sample_rates["last"]["value"] = self._sample_rates["current"]["value"]
+            self._sample_rates["current"] = {
+                "step": self._current_step,
+                "value": max(1.0, min(initial_rate, sample_rate))
+            }
+
+        return self._sample_rates["current"]["value"]
+
+    def step(self, update_epoch: bool = False):
+        if update_epoch:
+            self.current_epoch += 1
+        else:
+            self._current_step += 1
         self._update()
         return self
 
+    def update_metrics(self, metrics_data: dict = None):
+        self.metric_data["last"] = self.metric_data["current"]
+        self.metric_data["current"] = {
+            "step": self._current_step,
+            "value": metrics_data[self.focused_metric]
+        }
+
     def is_active(self):
         schedular_data = self._read()
-        if self.current_step in schedular_data["schedular"]:
+        if self.current_epoch in schedular_data["schedular"]:
             active = True
-        elif self.current_step < self.start_step:
+        elif self.current_epoch < self.start_epoch:
             active = False
-        elif self.current_step not in schedular_data["skip"]:
-            if self.start_step == 0:
-                if self.current_step % self._step == 0:
+        elif self.current_epoch not in schedular_data["skip"]:
+            if self.start_epoch == 0:
+                if self.current_epoch % self._step == 0:
                     active = True
                 else:
                     active = False
             else:
-                if self.current_step != 0 and self.current_step % self._step == 0:
+                if self.current_epoch != 0 and self.current_epoch % self._step == 0:
                     active = True
                 else:
                     active = False
@@ -110,10 +153,71 @@ class PseudoSchedular:
         return active
 
 
+def write_info(info_json: str, info: dict, lock):
+    with lock:
+        if os.path.exists(info_json):
+            with open(info_json) as f:
+                json_data = json.load(f)
+        else:
+            json_data = {}
+
+        for k, v in info.items():
+            if k not in json_data:
+                json_data[k] = v
+            else:
+                json_data[k] += v
+
+        if json_data:
+            with open(info_json, "w") as f:
+                json.dump(json_data, f)
+
+        return json_data
+
+
+def read_info(info_json: str, lock):
+    with lock:
+        if os.path.exists(info_json):
+            with open(info_json) as f:
+                return json.load(f)
+        else:
+            return {}
+
+
+def split_list(lst, num_parts):
+    avg_len = len(lst) // num_parts
+    remainder = len(lst) % num_parts
+    result = []
+    start = 0
+    for i in range(num_parts):
+        end = start + avg_len + (1 if i < remainder else 0)
+        result.append(lst[start:end])
+        start = end
+    return result
+
+
+def progress(info_json: str, n_target: int, total: int, lock):
+    n = 0
+    with tqdm(total=n_target, desc="generate pesudo masks") as pbar:
+        while True:
+            time.sleep(10)
+            info_data = read_info(info_json, lock)
+            if not info_data:
+                continue
+            info_total = info_data["total"]
+            info_empty = info_data["empty"]
+            finished = info_total - info_empty
+            if finished > n:
+                pbar.update(finished - n)
+                n = finished
+            if finished > n_target or n >= total:   # >?
+                break
+
+
 @torch.no_grad()
-def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
-                    task_id: int = None, save_png_mask: bool = False,
-                    split_path: str = None):
+def generate_pseudo(args, model, img_paths: List[str], pseudo_root: str,
+                    info_path: str, n_target: int, lock, n_save: int = 100,
+                    save_png_mask: bool = False):
+    print("000")
     model.eval()
     mask_predictor = MaskPredictor(
         model=model,
@@ -123,36 +227,44 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
         points_per_side=args.points_per_side,
         points_per_batch=args.points_per_batch
     )
+
     pseudo_data_dir = os.path.join(pseudo_root, "data")
     pseudo_label_dir = os.path.join(pseudo_root, "label")
-    if os.path.exists(pseudo_data_dir):
-        shutil.rmtree(pseudo_data_dir)
-    if os.path.exists(pseudo_label_dir):
-        shutil.rmtree(pseudo_label_dir)
-    os.makedirs(pseudo_data_dir)
-    os.makedirs(pseudo_label_dir)
 
-    desc = "Generating pseudo masks"
-    if task_id is not None:
-        desc = f"{desc}, task_id: {task_id}"
+    info = {"total": 0, "instances": 0, "empty": 0}
+    print("111")
+    for i, path in enumerate(img_paths):
 
-    infos = []
-    for path in tqdm(img_paths, desc=desc):
+        if i != 0 and i % n_save == 0:
+            task_info = write_info(info_path, info, lock)
+            info = {"total": 0, "instances": 0, "empty": 0}
+            if task_info.get("total", 0) - task_info.get("empty", 0) >= n_target:
+                break
 
         image = cv2.imread(path)
         if image is None:
             print(f"Could not load '{path}' as an image, skipping...")
             continue
 
+        info["total"] += 1
+
         # data
         transform = get_transform(args.image_size, image.shape[0], image.shape[1])
         dst_img = transform(image=image)["image"]
         dst_path = os.path.join(pseudo_data_dir, os.path.basename(path))
-        cv2.imwrite(dst_path, dst_img)
 
         # mask
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         mask = mask_predictor.predict(image)
+
+        vals = [_ for _ in np.unique(mask) if _ != 0]
+        # print("path = ", path, len(vals))
+        if len(vals) == 0:
+            info["empty"] += 1
+            continue
+
+        info["instances"] += len(vals)
+        cv2.imwrite(dst_path, dst_img)
 
         basename = os.path.basename(path)[:-4]
         mask_path = os.path.join(pseudo_label_dir, f"{basename}.npy")
@@ -164,38 +276,18 @@ def generate_pseudo(args, model, pseudo_root: str, img_paths: List[str] = None,
         # png
         if save_png_mask:
             img_path = os.path.join(pseudo_label_dir, f"{basename}.png")
-            vals_uint16 = [_ for _ in np.unique(dst_arr) if _ != 0][:255]
+            vals_uint8 = vals[:255]
             dst_label_uint8 = np.zeros(shape=dst_arr.shape, dtype=np.uint8)
-            if len(vals_uint16) > 0:
-                random.shuffle(vals_uint16)
-                step = calc_step(len(vals_uint16))
-                for j, val in enumerate(vals_uint16):
+            if len(vals_uint8) > 0:
+                random.shuffle(vals_uint8)
+                step = calc_step(len(vals_uint8))
+                for j, val in enumerate(vals_uint8):
                     dst_label_uint8[dst_arr == val] = 255 - j * step
 
             cv2.imwrite(img_path, dst_label_uint8)
 
-        infos.append({"basename": basename, "instances": len(np.unique(mask)) - 1})
-
-    with open(os.path.join(pseudo_root, "info.json"), "w") as f:
-        json.dump(infos, f)
-
-    split_dataset(data_root=pseudo_root, ext="png", test_size=0.0, split_path=split_path)
-
-
-def split_list(lst, num_parts):
-
-    avg_len = len(lst) // num_parts
-    remainder = len(lst) % num_parts
-
-    result = []
-    start = 0
-
-    for i in range(num_parts):
-        end = start + avg_len + (1 if i < remainder else 0)
-        result.append(lst[start:end])
-        start = end
-
-    return result
+    if info["total"] > 0:
+        write_info(info_path, info, lock)
 
 
 def read_pseudo_info(info_paths: List[str]) -> dict:
@@ -218,34 +310,49 @@ def read_pseudo_info(info_paths: List[str]) -> dict:
 @torch.no_grad()
 def generate_pseudo_multiple(args, model, pseudo_root: str, sample_rate: float = 1.0):
 
-    assert 0 < sample_rate <= 1.0, "wrong sample_rate!"
+    print("pseudo sample_rate: ", sample_rate)
+
+    assert 0 < sample_rate <= 1.0, f"wrong sample_rate: {sample_rate}"
+
+    if os.path.exists(pseudo_root):
+        shutil.rmtree(pseudo_root)
+
+    os.makedirs(pseudo_root)
+    pseudo_data_dir = os.path.join(pseudo_root, "data")
+    pseudo_label_dir = os.path.join(pseudo_root, "label")
+    os.makedirs(pseudo_data_dir)
+    os.makedirs(pseudo_label_dir)
 
     img_paths = glob.glob(os.path.join(args.unsupervised_dir, "*.png"))
-    print(f"\noriginal pseudo number: {len(img_paths)}")
-    img_paths = random.choices(img_paths, k=int(len(img_paths) * sample_rate))
-    print(f"\npseudo sample_rate = {sample_rate}, actual pseudo sample number: {len(img_paths)}")
     tasks = split_list(img_paths, args.unsupervised_num_processes)
 
+    lock = mp.Lock()
+    n_target = int(len(img_paths) * sample_rate)
+    info_path = os.path.join(pseudo_root, "info.json")
+
+    n_save = 100
+
     processes = []
-    split_paths = []
     pseudo_info_paths = []
-    for i, task in enumerate(tasks):
-        pseudo_dir = os.path.join(pseudo_root, f"split_{i}")
-
-        split_path = os.path.join(pseudo_dir, "split.json")
-        split_paths.append(split_path)
-
-        pseudo_info_path = os.path.join(pseudo_dir, "info.json")
-        pseudo_info_paths.append(pseudo_info_path)
-
-        p = mp.Process(target=generate_pseudo,
-                       args=(args, model, pseudo_dir, task, i, False, split_path))
+    for task in tasks:
+        p = mp.Process(
+            target=generate_pseudo,
+            args=(args, model, task, pseudo_root, info_path, n_target, lock, n_save, False)
+        )
         p.start()
         processes.append(p)
+
+    p = mp.Process(target=progress, args=(info_path, n_target, len(img_paths), lock))
+    p.start()
+    processes.append(p)
 
     for p in processes:
         p.join()
 
     pseudo_info = read_pseudo_info(pseudo_info_paths)
 
-    return split_paths, pseudo_info
+    split_path = os.path.join(pseudo_root, "split.json")
+    split_dataset(data_root=pseudo_root, ext="png", test_size=0.0,
+                  split_path=split_path)
+
+    return split_path, pseudo_info

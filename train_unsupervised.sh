@@ -30,8 +30,11 @@ python train.py \
 --unsupervised_step 1 \
 --unsupervised_weight 1.0 \
 --unsupervised_weight_gr 0.0 \
---unsupervised_sample_rates 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 \
+--unsupervised_initial_sample_rate 0.1 \
+--unsupervised_sample_rate_delta 0.1 \
+--unsupervised_metric_delta_threshold 0.01 \
 --unsupervised_num_processes 2 \
+--unsupervised_focused_metric "Overall/dice" \
 --pred_iou_thresh 0.88 \
 --stability_score_thresh 0.95 \
 --points_per_side 32 \
