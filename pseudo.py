@@ -217,7 +217,6 @@ def progress(info_json: str, n_target: int, total: int, lock):
 def generate_pseudo(args, model, img_paths: List[str], pseudo_root: str,
                     info_path: str, n_target: int, lock, n_save: int = 100,
                     save_png_mask: bool = False):
-    print("000")
     model.eval()
     mask_predictor = MaskPredictor(
         model=model,
@@ -232,7 +231,6 @@ def generate_pseudo(args, model, img_paths: List[str], pseudo_root: str,
     pseudo_label_dir = os.path.join(pseudo_root, "label")
 
     info = {"total": 0, "instances": 0, "empty": 0}
-    print("111")
     for i, path in enumerate(img_paths):
 
         if i != 0 and i % n_save == 0:
