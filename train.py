@@ -125,6 +125,9 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                     pseudo_schedular, test_loader, pseudo_root, gt_total: int,
                     pseudo_total: int = 0):
 
+    print("\n===========> train_loader.batch_sampler = ", train_loader.batch_sampler)
+    print("pseudo_schedular.is_active() 0000: ", pseudo_schedular.is_active())
+
     global global_metrics_dict
     global global_step
 
@@ -254,14 +257,8 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             global_metrics_dict["Loss/test"] = average_test_loss
 
             pseudo_schedular.update_metrics(global_metrics_dict)
-
+            print("pseudo_schedular.is_active() 11111: ", pseudo_schedular.is_active())
             if pseudo_schedular.is_active():
-                pseudo_split_path, pseudo_info = generate_pseudo_multiple(
-                    args, model, pseudo_root
-                )
-                for key, val in pseudo_info.items():
-                    global_metrics_dict[f"Pseudo/{key}"] = val
-
                 train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
                 pbar.total = tqdm(total=len(train_loader.batch_sampler))
                 print(f"update bar total: {pbar.total}")
