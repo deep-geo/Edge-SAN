@@ -128,10 +128,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
     global global_metrics_dict
     global global_step
 
-    if pseudo_schedular is not None:
-        pbar = tqdm(total=gt_total + int(pseudo_total * pseudo_schedular.sample_rate))
-    else:
-        pbar = tqdm(total=gt_total)
+    pbar = tqdm(total=len(train_loader.batch_sampler))
 
     # train_loader_bar = tqdm(train_loader)
     train_losses = []
@@ -266,9 +263,8 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                     global_metrics_dict[f"Pseudo/{key}"] = val
 
                 train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
-                updated_total = gt_total + int(pseudo_total * pseudo_schedular.sample_rate)
-                print(f"update bar total: {pbar.total} -> {updated_total}")
-                pbar.total = updated_total
+                pbar.total = tqdm(total=len(train_loader.batch_sampler))
+                print(f"update bar total: {pbar.total}")
 
             wandb.log(global_metrics_dict, step=global_step, commit=True)
 
