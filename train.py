@@ -41,7 +41,7 @@ def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
     prompt_dict = {}
     all_eval_metrics = []
 
-    for i, batched_input in enumerate(tqdm(test_loader)):
+    for i, batched_input in enumerate(tqdm(test_loader, desc="Testing")):
         # if i > 5:
         #     break
         batched_input = to_device(batched_input, args.device)
@@ -128,7 +128,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
     global global_metrics_dict
     global global_step
 
-    pbar = tqdm(total=len(train_loader.batch_sampler))
+    pbar = tqdm(total=len(train_loader.batch_sampler), desc="Training")
 
     # train_loader_bar = tqdm(train_loader)
     train_losses = []
