@@ -289,16 +289,11 @@ def generate_pseudo(args, model, img_paths: List[str], pseudo_root: str,
 
 def read_pseudo_info(info_path: str) -> dict:
 
-    info = {"total": 0, "empty": 0, "instances": 0}
-
     with open(info_path) as f:
-        data = json.load(f)
-        info["total"] += len(data)
-        info["empty"] += sum([1 for _ in data if _["instances"] == 0])
-        info["instances"] += sum([_["instances"] for _ in data])
+        info = json.load(f)
 
     info["miss_rate"] = info["empty"] / info["total"] if info["total"] else 0.0
-    info["average_instances"] = info["instances"] / info["total"]
+    info["average_instances"] = info["instances"] / info["total"] if info["total"] else 0.0
 
     return info
 
