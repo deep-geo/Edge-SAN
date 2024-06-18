@@ -259,7 +259,8 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             pseudo_schedular.update_metrics(global_metrics_dict)
             print("pseudo_schedular.is_active() 11111: ", pseudo_schedular.is_active())
             if pseudo_schedular.is_active():
-                train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
+                # train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
+                train_loader.batch_sampler.sample_rate = pseudo_schedular.sample_rate
                 pbar.total = tqdm(total=len(train_loader.batch_sampler))
                 print(f"update bar total: {pbar.total}")
 
@@ -415,6 +416,7 @@ def main(args):
             sample_rate=pseudo_schedular.sample_rate,
             drop_last=False
         )
+        print("batch_sampler")
         train_loader = DataLoader(train_set_gt + train_set_pseudo,
                                   batch_sampler=batch_sampler,
                                   num_workers=args.num_workers)
@@ -453,9 +455,6 @@ def main(args):
         print(f"\nTrain epoch {epoch}...")
 
         model.train()
-
-        if pseudo_schedular is not None:
-            pseudo_schedular.step(update_epoch=True)
 
         gt_total = len(train_set_gt)
         pseudo_total = len(train_set_pseudo) if train_set_pseudo is not None else 0
@@ -510,6 +509,9 @@ def main(args):
 
         wandb.log(global_metrics_dict, step=global_step, commit=True)
         global_metrics_dict = {}
+
+        if pseudo_schedular is not None:
+            pseudo_schedular.step(update_epoch=True)
 
 
 if __name__ == '__main__':

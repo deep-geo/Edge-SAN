@@ -132,6 +132,7 @@ class PseudoSchedular:
         }
 
     def is_active(self):
+        print(f"active check: current_epoch={self.current_epoch}, start_epoch={self.start_epoch}",)
         schedular_data = self._read()
         if self.current_epoch in schedular_data["schedular"]:
             active = True
