@@ -133,7 +133,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
     else:
         pbar = tqdm(total=gt_total)
 
-    train_loader_bar = tqdm(train_loader)
+    # train_loader_bar = tqdm(train_loader)
     train_losses = []
 
     pseudo_weights = None
@@ -141,7 +141,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
     dataloader_iter = iter(train_loader)
 
     while True:
-        pbar.update()
+
         try:
             batched_input = next(dataloader_iter)
         except StopIteration:
@@ -238,7 +238,8 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
         train_losses.append(loss.item())
 
-        train_loader_bar.set_postfix(train_loss=loss.item())
+        pbar.update()
+        pbar.set_postfix(train_loss=loss.item())
 
         if global_step % args.log_interval == 0:
             average_test_loss, test_metrics_overall, test_metrics_datasets = \
@@ -265,7 +266,9 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                     global_metrics_dict[f"Pseudo/{key}"] = val
 
                 train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
-                pbar.total = gt_total + int(pseudo_total * pseudo_schedular.sample_rate)
+                updated_total = gt_total + int(pseudo_total * pseudo_schedular.sample_rate)
+                print(f"update bar total: {pbar.total} -> {updated_total}")
+                pbar.total = updated_total
 
             wandb.log(global_metrics_dict, step=global_step, commit=True)
 
