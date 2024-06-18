@@ -446,7 +446,7 @@ class CombineBatchSampler(Sampler):
                 try:
                     idx = next(iter1)
                 except StopIteration:
-                    if self.sample_rate == 1.0:
+                    if self.sample_rate == 1.0 and finished_gt:
                         break
                     else:
                         random.shuffle(indices_pseudo)
