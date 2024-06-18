@@ -195,13 +195,14 @@ def split_list(lst, num_parts):
     return result
 
 
-def progress(info_json: str, n_target: int, total: int, lock):
+def progress(info_json: str, total: int, lock):
     n = 0
-    with tqdm(total=n_target, desc="generate pesudo masks") as pbar:
+    with tqdm(total=total, desc="generate pseudo masks") as pbar:
         while True:
             time.sleep(10)
             info_data = read_info(info_json, lock)
             if not info_data:
+                pbar.update(0)
                 continue
             info_total = info_data["total"]
             info_empty = info_data["empty"]
@@ -209,13 +210,13 @@ def progress(info_json: str, n_target: int, total: int, lock):
             if finished > n:
                 pbar.update(finished - n)
                 n = finished
-            if finished > n_target or n >= total:   # >?
+            if info_total >= total:   # >?
                 break
 
 
 @torch.no_grad()
 def generate_pseudo(args, model, img_paths: List[str], pseudo_root: str,
-                    info_path: str, n_target: int, lock, n_save: int = 100,
+                    info_path: str, lock, n_save: int = 100,
                     save_png_mask: bool = False):
     model.eval()
     mask_predictor = MaskPredictor(
@@ -233,18 +234,16 @@ def generate_pseudo(args, model, img_paths: List[str], pseudo_root: str,
     info = {"total": 0, "instances": 0, "empty": 0}
     for i, path in enumerate(img_paths):
 
+        info["total"] += 1
+
         if i != 0 and i % n_save == 0:
             task_info = write_info(info_path, info, lock)
             info = {"total": 0, "instances": 0, "empty": 0}
-            if task_info.get("total", 0) - task_info.get("empty", 0) >= n_target:
-                break
 
         image = cv2.imread(path)
         if image is None:
             print(f"Could not load '{path}' as an image, skipping...")
             continue
-
-        info["total"] += 1
 
         # data
         transform = get_transform(args.image_size, image.shape[0], image.shape[1])
@@ -306,11 +305,7 @@ def read_pseudo_info(info_paths: List[str]) -> dict:
 
 
 @torch.no_grad()
-def generate_pseudo_multiple(args, model, pseudo_root: str, sample_rate: float = 1.0):
-
-    print("pseudo sample_rate: ", sample_rate)
-
-    assert 0 < sample_rate <= 1.0, f"wrong sample_rate: {sample_rate}"
+def generate_pseudo_multiple(args, model, pseudo_root: str):
 
     if os.path.exists(pseudo_root):
         shutil.rmtree(pseudo_root)
@@ -325,7 +320,6 @@ def generate_pseudo_multiple(args, model, pseudo_root: str, sample_rate: float =
     tasks = split_list(img_paths, args.unsupervised_num_processes)
 
     lock = mp.Lock()
-    n_target = int(len(img_paths) * sample_rate)
     info_path = os.path.join(pseudo_root, "info.json")
 
     n_save = 100
@@ -335,12 +329,12 @@ def generate_pseudo_multiple(args, model, pseudo_root: str, sample_rate: float =
     for task in tasks:
         p = mp.Process(
             target=generate_pseudo,
-            args=(args, model, task, pseudo_root, info_path, n_target, lock, n_save, False)
+            args=(args, model, task, pseudo_root, info_path, lock, n_save, False)
         )
         p.start()
         processes.append(p)
 
-    p = mp.Process(target=progress, args=(info_path, n_target, len(img_paths), lock))
+    p = mp.Process(target=progress, args=(info_path, len(img_paths), lock))
     p.start()
     processes.append(p)
 
