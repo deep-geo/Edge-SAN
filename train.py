@@ -264,7 +264,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             if pseudo_schedular.is_active():
                 # train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
                 train_loader.batch_sampler.sample_rate = pseudo_schedular.sample_rate
-                pbar.total = tqdm(total=len(train_loader.batch_sampler))
+                pbar.total = len(train_loader.batch_sampler)
                 print(f"update bar total: {pbar.total}")
 
             wandb.log(global_metrics_dict, step=global_step, commit=True)
