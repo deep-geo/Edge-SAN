@@ -467,6 +467,9 @@ def main(args):
         if args.lr_scheduler is not None:
             scheduler.step()
 
+        if pseudo_schedular is not None:
+            pseudo_schedular.step(update_epoch=True)
+
         if args.activate_unsupervised:
             global_metrics_dict["Pseudo/weight"] = pseudo_schedular.pseudo_weight
 
@@ -509,9 +512,6 @@ def main(args):
 
         wandb.log(global_metrics_dict, step=global_step, commit=True)
         global_metrics_dict = {}
-
-        if pseudo_schedular is not None:
-            pseudo_schedular.step(update_epoch=True)
 
 
 if __name__ == '__main__':
