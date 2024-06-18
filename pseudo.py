@@ -196,21 +196,15 @@ def split_list(lst, num_parts):
 
 
 def progress(info_json: str, total: int, lock):
-    n = 0
     with tqdm(total=total, desc="generate pseudo masks") as pbar:
         while True:
             time.sleep(10)
             info_data = read_info(info_json, lock)
             if not info_data:
-                pbar.update(0)
                 continue
             info_total = info_data["total"]
-            info_empty = info_data["empty"]
-            finished = info_total - info_empty
-            if finished > n:
-                pbar.update(finished - n)
-                n = finished
-            if info_total >= total:   # >?
+            pbar.update(info_total - pbar.n)
+            if info_total == total:   # >?
                 break
 
 
