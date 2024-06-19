@@ -249,9 +249,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
                 last_val = pseudo_schedular.metric_data["last"].get("value") or 0.0
                 current_val = pseudo_schedular.metric_data["current"].get("value") or 0.0
-                print(f"update: bar total = {pbar.total}, "
-                      f"focused_metric_change = {current_val - last_val}, "
-                      f"pseudo sample_rate = {train_loader.batch_sampler.sample_rate}")
+                print(f"\nupdate: bar total = {pbar.total}, focused_metric_change = {current_val - last_val}, pseudo sample_rate = {train_loader.batch_sampler.sample_rate}")
 
                 global_metrics_dict["Pseudo/sample_rate"] = pseudo_schedular.sample_rate
 
