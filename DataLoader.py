@@ -182,7 +182,7 @@ class TrainingDataset(Dataset):
                 split_data = json.load(f)
 
             data_root = os.path.dirname(split_path)
-            print(f"\nRead train data from: {data_root}")
+            print(f"Read train data from: {data_root}")
             for data_path, label_path in tqdm(split_data["train"]):
                 data_path = os.path.join(data_root, data_path)
                 label_path = os.path.join(data_root, label_path)
@@ -433,8 +433,6 @@ class CombineBatchSampler(Sampler):
 
         random.shuffle(indices_gt)
         random.shuffle(indices_pseudo)
-
-        print(f"len() = {len(indices_gt)}, len(indices_pseudo) = {len(indices_pseudo)}, sample_rate = {self.sample_rate}")
 
         iter0 = iter(indices_gt)
         iter1 = iter(indices_pseudo)

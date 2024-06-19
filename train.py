@@ -1,6 +1,5 @@
 import os
 import re
-import json
 import random
 import datetime
 import glob
@@ -14,7 +13,7 @@ from torch.utils.data import DataLoader
 from DataLoader import TrainingDataset, TestingDataset, TrainingDatasetFolder, \
     TestingDatasetFolder, stack_dict_batched, CombineBatchSampler
 from utils import get_logger, generate_point, setting_prompt_none, save_masks, \
-    postprocess_masks, to_device, prompt_and_decoder, MaskPredictor
+    postprocess_masks, to_device, prompt_and_decoder
 from loss import FocalDiceloss_IoULoss
 from arguments import parse_train_args
 from metrics import SegMetrics, AggregatedMetrics
@@ -33,16 +32,14 @@ global_train_losses = []
 @torch.no_grad()
 def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
     model.eval()
-
-    dataset_names = []
-
     criterion = FocalDiceloss_IoULoss()
 
+    dataset_names = []
     test_loss = []
     prompt_dict = {}
     all_eval_metrics = []
 
-    for i, batched_input in enumerate(tqdm(test_loader, desc="Testing", mininterval=0.5)):
+    for i, batched_input in enumerate(tqdm(test_loader, desc="Testing", mininterval=0.5, ascii=True)):
         # if i > 5:
         #     break
         batched_input = to_device(batched_input, args.device)
@@ -115,16 +112,11 @@ def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
     else:
         metrics_datasets = None
 
-    # print("\naggregated whole metrics: ", json.dumps(metrics_overall, indent=2))
-    # if metrics_datasets is not None:
-    #     print("\naggregated datasets metrics: ", json.dumps(metrics_datasets, indent=2))
-
     return average_loss, metrics_overall, metrics_datasets
 
 
 def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
-                    pseudo_schedular, test_loader, pseudo_root, gt_total: int,
-                    pseudo_total: int = 0):
+                    pseudo_schedular, test_loader):
 
     global global_metrics_dict
     global global_step
@@ -252,7 +244,6 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                 pbar.total = len(train_loader.batch_sampler)
                 print(f"update: bar total = {pbar.total}, pseudo sample_rate = {train_loader.batch_sampler.sample_rate}")
                 global_metrics_dict["Pseudo/sample_rate"] = pseudo_schedular.sample_rate
-                pseudo_schedular.calc_sample_rate(debug=True)
 
             wandb.log(global_metrics_dict, step=global_step, commit=True)
 
@@ -359,7 +350,6 @@ def main(args):
 
     # pseudo dataset
     pseudo_schedular = None
-    pseudo_root = None
     train_set_pseudo = None
     if args.activate_unsupervised:
         pseudo_root = os.path.join(run_dir, "pseudo")
@@ -380,8 +370,6 @@ def main(args):
         )
 
         if pseudo_schedular.is_active():
-            print(f"\nactivate pseudo: current step {pseudo_schedular.current_epoch}, "
-                  f"weight {pseudo_schedular.pseudo_weight}")
             pseudo_split_path, pseudo_info = generate_pseudo_multiple(
                 args, model, pseudo_root
             )
@@ -445,12 +433,9 @@ def main(args):
 
         model.train()
 
-        gt_total = len(train_set_gt)
-        pseudo_total = len(train_set_pseudo) if train_set_pseudo is not None else 0
-
         train_one_epoch(
             args, model, optimizer, train_loader, epoch, criterion,
-            pseudo_schedular, test_loader, pseudo_root, gt_total, pseudo_total
+            pseudo_schedular, test_loader
         )
 
         if args.lr_scheduler is not None:
@@ -464,8 +449,6 @@ def main(args):
 
         if args.activate_unsupervised:
             if pseudo_schedular.is_active():
-                print(f"\nactivate pseudo: current step {pseudo_schedular.current_epoch}, "
-                      f"weight {pseudo_schedular.pseudo_weight}")
                 pseudo_root = os.path.join(run_dir, "pseudo")
                 pseudo_split_path, pseudo_info = generate_pseudo_multiple(
                     args, model, pseudo_root

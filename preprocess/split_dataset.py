@@ -53,7 +53,7 @@ def split_dataset(data_root: str, ext: str, test_size: float, seed: int = None,
     with open(split_path, "w") as f:
         json.dump(split_json, f, indent=2)
 
-    print(f"Save split json to: {split_path}")
+    # print(f"Save split json to: {split_path}")
 
     return split_path
 
