@@ -87,7 +87,10 @@ class PseudoSchedular:
         return max(0, min(self._pseudo_weight + self.pseudo_weight_gr * (self.current_epoch - self.start_epoch + 1), 1))
 
     @property
-    def sample_rate(self, debug=False):
+    def sample_rate(self):
+        return self.calc_sample_rate()
+
+    def calc_sample_rate(self, debug=False):
         if not self.is_active():
             return 0.0
 

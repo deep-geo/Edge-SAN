@@ -269,7 +269,9 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                 train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
                 # train_loader.batch_sampler.sample_rate = pseudo_schedular.sample_rate
                 pbar.total = len(train_loader.batch_sampler)
-                print(f"update bar total: {pbar.total}")
+                print(f"update bar total: {pbar.total}, train_loader.batch_sampler.sample_rate: {train_loader.batch_sampler.sample_rate}")
+                global_metrics_dict["Pseudo/sample_rate"] = pseudo_schedular.sample_rate
+                pseudo_schedular.cale_sample_rate(debug=True)
 
             wandb.log(global_metrics_dict, step=global_step, commit=True)
 
