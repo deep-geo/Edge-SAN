@@ -446,8 +446,10 @@ class CombineBatchSampler(Sampler):
                 try:
                     idx = next(iter1)
                 except StopIteration:
-                    if self.sample_rate == 1.0 and finished_gt:
+                    if finished_gt:
                         break
+                    # if self.sample_rate == 1.0 and finished_gt:
+                    #     break
                     else:
                         random.shuffle(indices_pseudo)
                         iter1 = iter(indices_pseudo)
@@ -456,10 +458,10 @@ class CombineBatchSampler(Sampler):
                     idx = next(iter0)
                 except StopIteration:
                     finished_gt = True
-                    if self.sample_rate < 1.0:
-                        break
-                    else:
-                        continue
+                    # if self.sample_rate < 1.0:
+                    #     break
+                    # else:
+                    #     continue
 
             batch.append(idx)
             if len(batch) == self.batch_size:
