@@ -111,7 +111,7 @@ class PseudoSchedular:
             self._sample_rates["last"]["value"] = self._sample_rates["current"]["value"]
             self._sample_rates["current"] = {
                 "step": self._current_step,
-                "value": max(1.0, min(initial_rate, sample_rate))
+                "value": min(1.0, max(initial_rate, sample_rate))
             }
 
         return self._sample_rates["current"]["value"]
