@@ -61,7 +61,7 @@ class TestingDataset(Dataset):
                 split_data = json.load(f)
 
             data_root = os.path.dirname(split_path)
-            print(f"Read test data from: {data_root}")
+            # print(f"Read test data from: {data_root}")
             for data_path, label_path in tqdm(split_data["test"]):
                 data_path = os.path.join(data_root, data_path)
                 label_path = os.path.join(data_root, label_path)
@@ -182,7 +182,7 @@ class TrainingDataset(Dataset):
                 split_data = json.load(f)
 
             data_root = os.path.dirname(split_path)
-            print(f"Read train data from: {data_root}")
+            # print(f"Read train data from: {data_root}")
             for data_path, label_path in tqdm(split_data["train"]):
                 data_path = os.path.join(data_root, data_path)
                 label_path = os.path.join(data_root, label_path)

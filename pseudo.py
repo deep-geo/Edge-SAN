@@ -208,7 +208,7 @@ def split_list(lst, num_parts):
 
 
 def progress(info_json: str, total: int, lock):
-    with tqdm(total=total, desc="generate pseudo masks") as pbar:
+    with tqdm(total=total, desc="generate pseudo masks", mininterval=1.0) as pbar:
         while True:
             time.sleep(10)
             info_data = read_info(info_json, lock)
@@ -343,6 +343,6 @@ def generate_pseudo_multiple(args, model, pseudo_root: str):
     split_dataset(data_root=pseudo_root, ext="png", test_size=0.0,
                   split_path=split_path)
 
-    print("\npseudo masks info: \n", json.dumps(pseudo_info, indent=2))
+    print("pseudo masks info: \n", json.dumps(pseudo_info, indent=2))
 
     return split_path, pseudo_info
