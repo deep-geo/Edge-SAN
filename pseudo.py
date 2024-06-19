@@ -345,4 +345,6 @@ def generate_pseudo_multiple(args, model, pseudo_root: str):
     split_dataset(data_root=pseudo_root, ext="png", test_size=0.0,
                   split_path=split_path)
 
+    print("\npseudo_info: \n", json.dumps(pseudo_info, indent=2))
+
     return split_path, pseudo_info

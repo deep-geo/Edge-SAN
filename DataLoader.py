@@ -434,7 +434,7 @@ class CombineBatchSampler(Sampler):
         random.shuffle(indices_gt)
         random.shuffle(indices_pseudo)
 
-        print(f"len() = {len(indices_gt)}, len() = {len(indices_pseudo)}, sample_rate = {self.sample_rate}")
+        print(f"len() = {len(indices_gt)}, len(indices_pseudo) = {len(indices_pseudo)}, sample_rate = {self.sample_rate}")
 
         iter0 = iter(indices_gt)
         iter1 = iter(indices_pseudo)
