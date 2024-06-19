@@ -115,9 +115,9 @@ def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
     else:
         metrics_datasets = None
 
-    print("\naggregated whole metrics: ", json.dumps(metrics_overall, indent=2))
-    if metrics_datasets is not None:
-        print("\naggregated datasets metrics: ", json.dumps(metrics_datasets, indent=2))
+    # print("\naggregated whole metrics: ", json.dumps(metrics_overall, indent=2))
+    # if metrics_datasets is not None:
+    #     print("\naggregated datasets metrics: ", json.dumps(metrics_datasets, indent=2))
 
     return average_loss, metrics_overall, metrics_datasets
 
@@ -126,29 +126,15 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                     pseudo_schedular, test_loader, pseudo_root, gt_total: int,
                     pseudo_total: int = 0):
 
-    print("\n===========> train_loader.batch_sampler = ", train_loader.batch_sampler)
-    print("pseudo_schedular.is_active() 0000: ", pseudo_schedular.is_active())
-
     global global_metrics_dict
     global global_step
     global global_train_losses
 
-    print("len(train_loader.batch_sampler) = ", len(train_loader.batch_sampler))
-
-    # pbar = tqdm(total=len(train_loader.batch_sampler), desc="Training")
     pbar = tqdm(total=len(train_loader), desc="Training", mininterval=0.5)
-
-    # train_loader_bar = tqdm(train_loader)
-
     pseudo_weights = None
-
     dataloader_iter = iter(train_loader)
 
     while True:
-
-        # if pseudo_schedular:
-        #     print(
-        #         f"active check: current_epoch={pseudo_schedular.current_epoch}, start_epoch={pseudo_schedular.start_epoch}, current_step = {pseudo_schedular._current_step}, sample_rate = {pseudo_schedular.sample_rate}, data_loader_len = {len(train_loader)}, global_step = {global_step}", )
 
         try:
             batched_input = next(dataloader_iter)
@@ -156,9 +142,6 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             break
 
         global_step += 1
-        # nn += 1
-        # if nn > 16:
-        #     break
         batched_input = stack_dict_batched(batched_input)
         batched_input = to_device(batched_input, args.device)
 
@@ -245,13 +228,8 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         global_train_losses.append(loss.item())
 
         pbar.update()
-        pbar.set_postfix(train_loss=loss.item(), sr=pseudo_schedular.sample_rate, epoch=epoch)
-# """
-#         if pseudo_schedular:
-#             print(
-#                 f"active check: current_epoch={pseudo_schedular.current_epoch}, start_epoch={pseudo_schedular.start_epoch}, current_step = {pseudo_schedular._current_step}, sample_rate = {pseudo_schedular.sample_rate}, data_loader_len = {len(train_loader)}, global_step = {global_step}", )
-#
-# """
+        pbar.set_postfix(train_loss=loss.item(), pseudo_rate=pseudo_schedular.sample_rate, epoch=epoch)
+
         if global_step % args.log_interval == 0:
             average_test_loss, test_metrics_overall, test_metrics_datasets = \
                 eval_model(args, model, test_loader, output_dataset_metrics=True)
@@ -267,14 +245,12 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             global_metrics_dict["Loss/train"] = average_train_loss
             global_metrics_dict["Loss/test"] = average_test_loss
 
-            print("pseudo_schedular.is_active() 11111: ", pseudo_schedular.is_active())
             if pseudo_schedular.is_active():
                 pseudo_schedular.step(update_epoch=False)
                 pseudo_schedular.update_metrics(global_metrics_dict)
                 train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
-                # train_loader.batch_sampler.sample_rate = pseudo_schedular.sample_rate
                 pbar.total = len(train_loader.batch_sampler)
-                print(f"update bar total: {pbar.total}, train_loader.batch_sampler.sample_rate: {train_loader.batch_sampler.sample_rate}")
+                print(f"update: bar total = {pbar.total}, pseudo sample_rate = {train_loader.batch_sampler.sample_rate}")
                 global_metrics_dict["Pseudo/sample_rate"] = pseudo_schedular.sample_rate
                 pseudo_schedular.calc_sample_rate(debug=True)
 
@@ -316,7 +292,7 @@ def main(args):
             if chkpts:
                 resume_chkpt = chkpts[-1]
 
-    print("resume_chkpt: ", resume_chkpt)
+    print("\nresume_chkpt: ", resume_chkpt)
 
     resume_epoch = 0
     if resume_chkpt:
@@ -430,7 +406,6 @@ def main(args):
             sample_rate=pseudo_schedular.sample_rate,
             drop_last=False
         )
-        print("batch_sampler")
         train_loader = DataLoader(train_set_gt + train_set_pseudo,
                                   batch_sampler=batch_sampler,
                                   num_workers=args.num_workers)
@@ -467,7 +442,6 @@ def main(args):
     global_metrics_dict = {}
     
     for epoch in range(resume_epoch, args.epochs):
-        print(f"\nTrain epoch {epoch}...")
 
         model.train()
 
