@@ -118,6 +118,9 @@ class PseudoSchedular:
 
                 last_sample_rate = self._sample_rates["last"].get("value") or initial_rate
                 sample_rate = last_sample_rate + delta_sample_rate
+                if sample_rate <= 0:
+                    sample_rate = last_sample_rate
+
                 if debug:
                     print(f"\n====>>>>last_val: {last_val}, current_val: {current_val}, delta: {delta}, delta_sample_rate: {delta_sample_rate}, sample_rate: {sample_rate}")
                     print(f"\n====>>>>befort self._sample_rates: {self._sample_rates}")
@@ -125,7 +128,7 @@ class PseudoSchedular:
                 self._sample_rates["last"]["value"] = self._sample_rates["current"]["value"]
                 self._sample_rates["current"] = {
                     "step": self._current_step,
-                    "value": min(1.0, max(initial_rate, sample_rate))
+                    "value": sample_rate
                 }
 
                 if debug:
