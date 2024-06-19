@@ -87,7 +87,7 @@ class PseudoSchedular:
         return max(0, min(self._pseudo_weight + self.pseudo_weight_gr * (self.current_epoch - self.start_epoch + 1), 1))
 
     @property
-    def sample_rate(self):
+    def sample_rate(self, debug=False):
         if not self.is_active():
             return 0.0
 
@@ -106,13 +106,22 @@ class PseudoSchedular:
             initial_rate = self._sample_rates["initial"]["value"]
             last_sample_rate = self._sample_rates["last"].get("value") or initial_rate
             sample_rate = last_sample_rate + delta_sample_rate
+            if debug:
+                print(f"\n====>>>>last_val: {last_val}, current_val: {current_val}, delta: {delta}, delta_sample_rate: {delta_sample_rate}, sample_rate: {sample_rate}")
 
+
+            if debug:
+                print(f"\n====>>>>befort self._sample_rates: {self._sample_rates}")
             self._sample_rates["last"]["step"] = self._sample_rates["current"]["step"]
             self._sample_rates["last"]["value"] = self._sample_rates["current"]["value"]
             self._sample_rates["current"] = {
                 "step": self._current_step,
                 "value": min(1.0, max(initial_rate, sample_rate))
             }
+
+            if debug:
+                print(f"\n====>>>>after self._sample_rates: {self._sample_rates}")
+
 
         return self._sample_rates["current"]["value"]
 
@@ -125,11 +134,13 @@ class PseudoSchedular:
         return self
 
     def update_metrics(self, metrics_data: dict = None):
+        print("self.metric_data before updated: ", self.metric_data)
         self.metric_data["last"] = self.metric_data["current"]
         self.metric_data["current"] = {
             "step": self._current_step,
             "value": metrics_data[self.focused_metric]
         }
+        print("self.metric_data after updated: ", self.metric_data)
 
     def is_active(self):
         schedular_data = self._read()
