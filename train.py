@@ -27,6 +27,7 @@ torch.set_default_dtype(torch.float32)
 max_num_chkpt = 3
 global_step = 0
 global_metrics_dict = {}
+global_train_losses = []
 
 
 @torch.no_grad()
@@ -130,6 +131,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
     global global_metrics_dict
     global global_step
+    global global_train_losses
 
     print("len(train_loader.batch_sampler) = ", len(train_loader.batch_sampler))
 
@@ -137,7 +139,6 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
     pbar = tqdm(total=len(train_loader), desc="Training")
 
     # train_loader_bar = tqdm(train_loader)
-    train_losses = []
 
     pseudo_weights = None
 
@@ -239,7 +240,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             state = {'model': model.state_dict(), 'optimizer': optimizer.state_dict()}
             torch.save(state, save_path)
 
-        train_losses.append(loss.item())
+        global_train_losses.append(loss.item())
 
         pbar.update()
         pbar.set_postfix(train_loss=loss.item())
@@ -255,22 +256,22 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                         global_metrics_dict[f"{dataset_name}/{metric}"] = \
                             test_metrics_datasets[dataset_name].get(metric, None)
 
-            average_train_loss = np.mean(train_losses)
+            average_train_loss = np.mean(global_train_losses)
             global_metrics_dict["Loss/train"] = average_train_loss
             global_metrics_dict["Loss/test"] = average_test_loss
 
             pseudo_schedular.update_metrics(global_metrics_dict)
             print("pseudo_schedular.is_active() 11111: ", pseudo_schedular.is_active())
             if pseudo_schedular.is_active():
-                # train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
-                train_loader.batch_sampler.sample_rate = pseudo_schedular.sample_rate
+                train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
+                # train_loader.batch_sampler.sample_rate = pseudo_schedular.sample_rate
                 pbar.total = len(train_loader.batch_sampler)
                 print(f"update bar total: {pbar.total}")
 
             wandb.log(global_metrics_dict, step=global_step, commit=True)
 
             global_metrics_dict = {}
-            train_losses = []
+            global_train_losses = []
 
 
 def main(args):
