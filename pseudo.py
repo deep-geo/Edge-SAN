@@ -135,13 +135,13 @@ class PseudoSchedular:
         return self
 
     def update_metrics(self, metrics_data: dict = None):
-        print("self.metric_data before updated: ", self.metric_data)
+        # print("self.metric_data before updated: ", self.metric_data)
         self.metric_data["last"] = self.metric_data["current"]
         self.metric_data["current"] = {
             "step": self._current_step,
             "value": metrics_data[self.focused_metric]
         }
-        print("self.metric_data after updated: ", self.metric_data)
+        # print("self.metric_data after updated: ", self.metric_data)
 
     def is_active(self):
         schedular_data = self._read()
@@ -294,13 +294,10 @@ def generate_pseudo(args, model, img_paths: List[str], pseudo_root: str,
 
 
 def read_pseudo_info(info_path: str) -> dict:
-
     with open(info_path) as f:
         info = json.load(f)
-
     info["miss_rate"] = info["empty"] / info["total"] if info["total"] else 0.0
     info["average_instances"] = info["instances"] / info["total"] if info["total"] else 0.0
-
     return info
 
 

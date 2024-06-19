@@ -31,6 +31,8 @@ global_train_losses = []
 
 @torch.no_grad()
 def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
+    global global_step
+
     model.eval()
     criterion = FocalDiceloss_IoULoss()
 
@@ -39,7 +41,9 @@ def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
     prompt_dict = {}
     all_eval_metrics = []
 
-    for i, batched_input in enumerate(tqdm(test_loader, desc="Testing", mininterval=0.5, ascii=True)):
+    for i, batched_input in enumerate(tqdm(test_loader,
+                                           desc=f"Testing(step={global_step})",
+                                           mininterval=0.5, ascii=True)):
         # if i > 5:
         #     break
         batched_input = to_device(batched_input, args.device)
@@ -242,7 +246,13 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                 pseudo_schedular.update_metrics(global_metrics_dict)
                 train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
                 pbar.total = len(train_loader.batch_sampler)
-                print(f"update: bar total = {pbar.total}, pseudo sample_rate = {train_loader.batch_sampler.sample_rate}")
+
+                last_val = pseudo_schedular.metric_data["last"].get("value") or 0.0
+                current_val = pseudo_schedular.metric_data["current"].get("value") or 0.0
+                print(f"update: bar total = {pbar.total}, "
+                      f"focused_metric_change = {current_val - last_val}, "
+                      f"pseudo sample_rate = {train_loader.batch_sampler.sample_rate}")
+
                 global_metrics_dict["Pseudo/sample_rate"] = pseudo_schedular.sample_rate
 
             wandb.log(global_metrics_dict, step=global_step, commit=True)
