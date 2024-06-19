@@ -146,6 +146,10 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
     while True:
 
+        if pseudo_schedular:
+            print(
+                f"active check: current_epoch={pseudo_schedular.current_epoch}, start_epoch={pseudo_schedular.start_epoch}, current_step = {pseudo_schedular._current_step}, sample_rate = {pseudo_schedular.sample_rate}, data_loader_len = {len(train_loader)}, global_step = {global_step}", )
+
         try:
             batched_input = next(dataloader_iter)
         except StopIteration:
