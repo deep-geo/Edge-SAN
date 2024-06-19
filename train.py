@@ -42,7 +42,7 @@ def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
     prompt_dict = {}
     all_eval_metrics = []
 
-    for i, batched_input in enumerate(tqdm(test_loader, desc="Testing")):
+    for i, batched_input in enumerate(tqdm(test_loader, desc="Testing", mininterval=0.5)):
         # if i > 5:
         #     break
         batched_input = to_device(batched_input, args.device)
@@ -459,7 +459,8 @@ def main(args):
     global_metrics_dict["Loss/train"] = 0.0
     global_metrics_dict["Loss/test"] = 0.0
 
-    pseudo_schedular.update_metrics(global_metrics_dict)
+    if pseudo_schedular.is_active():
+        pseudo_schedular.update_metrics(global_metrics_dict)
 
     # wandb.log(global_metrics_dict, step=global_step, commit=True)
     wandb.log(global_metrics_dict, step=global_step, commit=True)
