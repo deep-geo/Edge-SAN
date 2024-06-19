@@ -36,11 +36,12 @@ class PseudoSchedular:
                  pseudo_weight_gr: float = 0.0):
         self.schedular_dir = schedular_dir
         self.focused_metric = focused_metric
-        self._sample_rates = {
-            "initial": {"step": 0, "value": initial_sample_rate},
-            "last": {"step": None, "value": None},
-            "current": {"step": None, "value": None},
-        }
+        self._sample_rate = initial_sample_rate
+        # self._sample_rates = {
+        #     "initial": {"step": 0, "value": initial_sample_rate},
+        #     "last": {"step": None, "value": None},
+        #     "current": {"step": None, "value": None},
+        # }
         self.sample_rate_delta = sample_rate_delta
         self.metric_delta_threshold = metric_delta_threshold
         self.metric_data = {
@@ -91,6 +92,8 @@ class PseudoSchedular:
 
         if not self.is_active():
             return 0.0
+        else:
+            return self._sample_rate
 
         initial_rate = self._sample_rates["initial"]["value"]
 
@@ -136,13 +139,31 @@ class PseudoSchedular:
         return self
 
     def update_metrics(self, metrics_data: dict = None):
-        # print("self.metric_data before updated: ", self.metric_data)
-        self.metric_data["last"] = self.metric_data["current"]
-        self.metric_data["current"] = {
-            "step": self._current_step,
-            "value": metrics_data[self.focused_metric]
-        }
-        # print("self.metric_data after updated: ", self.metric_data)
+        if self.is_active():
+            self.metric_data["last"] = self.metric_data["current"]
+            self.metric_data["current"] = {
+                "step": self._current_step,
+                "value": metrics_data[self.focused_metric]
+            }
+
+            last_val = self.metric_data["last"].get("value") or 0.0
+            current_val = self.metric_data["current"].get("value") or 0.0
+            delta = current_val - last_val
+
+            if delta > self.metric_delta_threshold:
+                delta_sample_rate = self.sample_rate_delta
+            elif delta <= -1 * self.metric_delta_threshold:
+                delta_sample_rate = -1 * self.sample_rate_delta
+            else:
+                delta_sample_rate = 0
+
+            last_sample_rate = self._sample_rate
+            sample_rate = last_sample_rate + delta_sample_rate
+
+            if sample_rate <= 0 or sample_rate >= 1:
+                sample_rate = last_sample_rate
+
+            self._sample_rate = sample_rate
 
     def is_active(self):
         schedular_data = self._read()
