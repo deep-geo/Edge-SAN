@@ -94,37 +94,42 @@ class PseudoSchedular:
         if not self.is_active():
             return 0.0
 
+        initial_rate = self._sample_rates["initial"]["value"]
+
         if self._current_step != self._sample_rates["current"]["step"]:
-            last_val = self.metric_data["last"].get("value") or 0.0
-            current_val = self.metric_data["current"].get("value") or 0.0
-            delta = current_val - last_val
-
-            if delta > self.metric_delta_threshold:
-                delta_sample_rate = self.sample_rate_delta
-            elif delta <= self.metric_delta_threshold:
-                delta_sample_rate = -1 * self.sample_rate_delta
+            if self._sample_rates["current"]["step"] is None:
+                if debug:
+                    print(f"current sample rate step is None, use initial_rate: {initial_rate}")
+                self._sample_rates["current"] = {
+                    "step": self._current_step,
+                    "value": initial_rate,
+                }
             else:
-                delta_sample_rate = 0
+                last_val = self.metric_data["last"].get("value") or 0.0
+                current_val = self.metric_data["current"].get("value") or 0.0
+                delta = current_val - last_val
 
-            initial_rate = self._sample_rates["initial"]["value"]
-            last_sample_rate = self._sample_rates["last"].get("value") or initial_rate
-            sample_rate = last_sample_rate + delta_sample_rate
-            if debug:
-                print(f"\n====>>>>last_val: {last_val}, current_val: {current_val}, delta: {delta}, delta_sample_rate: {delta_sample_rate}, sample_rate: {sample_rate}")
+                if delta > self.metric_delta_threshold:
+                    delta_sample_rate = self.sample_rate_delta
+                elif delta <= self.metric_delta_threshold:
+                    delta_sample_rate = -1 * self.sample_rate_delta
+                else:
+                    delta_sample_rate = 0
 
+                last_sample_rate = self._sample_rates["last"].get("value") or initial_rate
+                sample_rate = last_sample_rate + delta_sample_rate
+                if debug:
+                    print(f"\n====>>>>last_val: {last_val}, current_val: {current_val}, delta: {delta}, delta_sample_rate: {delta_sample_rate}, sample_rate: {sample_rate}")
+                    print(f"\n====>>>>befort self._sample_rates: {self._sample_rates}")
+                self._sample_rates["last"]["step"] = self._sample_rates["current"]["step"]
+                self._sample_rates["last"]["value"] = self._sample_rates["current"]["value"]
+                self._sample_rates["current"] = {
+                    "step": self._current_step,
+                    "value": min(1.0, max(initial_rate, sample_rate))
+                }
 
-            if debug:
-                print(f"\n====>>>>befort self._sample_rates: {self._sample_rates}")
-            self._sample_rates["last"]["step"] = self._sample_rates["current"]["step"]
-            self._sample_rates["last"]["value"] = self._sample_rates["current"]["value"]
-            self._sample_rates["current"] = {
-                "step": self._current_step,
-                "value": min(1.0, max(initial_rate, sample_rate))
-            }
-
-            if debug:
-                print(f"\n====>>>>after self._sample_rates: {self._sample_rates}")
-
+                if debug:
+                    print(f"\n====>>>>after self._sample_rates: {self._sample_rates}")
 
         return self._sample_rates["current"]["value"]
 
