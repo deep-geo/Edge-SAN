@@ -3,13 +3,11 @@ import os
 import json
 import random
 import cv2
-import glob
 import torch
 import numpy as np
 import albumentations as A
 
 from albumentations.pytorch import ToTensorV2
-from tqdm import tqdm
 from utils import get_boxes_from_mask, init_point_sampling, get_edge_points_from_mask
 from torch.utils.data import Dataset, DataLoader, Sampler
 from preprocess.split_dataset import split_dataset
@@ -62,7 +60,7 @@ class TestingDataset(Dataset):
 
             data_root = os.path.dirname(split_path)
             # print(f"Read test data from: {data_root}")
-            for data_path, label_path in tqdm(split_data["test"]):
+            for data_path, label_path in split_data["test"]:
                 data_path = os.path.join(data_root, data_path)
                 label_path = os.path.join(data_root, label_path)
                 label = np.load(label_path)
@@ -183,7 +181,7 @@ class TrainingDataset(Dataset):
 
             data_root = os.path.dirname(split_path)
             # print(f"Read train data from: {data_root}")
-            for data_path, label_path in tqdm(split_data["train"]):
+            for data_path, label_path in split_data["train"]:
                 data_path = os.path.join(data_root, data_path)
                 label_path = os.path.join(data_root, label_path)
                 self.image_paths.append(data_path)
