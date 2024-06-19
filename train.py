@@ -201,8 +201,6 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
         optimizer.step()
         optimizer.zero_grad()
-        if pseudo_schedular is not None and pseudo_schedular.is_active():
-            pseudo_schedular.step(update_epoch=False)
 
         point_num = random.choice(args.point_list)
         batched_input = generate_point(masks, labels, low_res_masks,
@@ -264,9 +262,10 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             global_metrics_dict["Loss/train"] = average_train_loss
             global_metrics_dict["Loss/test"] = average_test_loss
 
-            pseudo_schedular.update_metrics(global_metrics_dict)
             print("pseudo_schedular.is_active() 11111: ", pseudo_schedular.is_active())
             if pseudo_schedular.is_active():
+                pseudo_schedular.step(update_epoch=False)
+                pseudo_schedular.update_metrics(global_metrics_dict)
                 train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
                 # train_loader.batch_sampler.sample_rate = pseudo_schedular.sample_rate
                 pbar.total = len(train_loader.batch_sampler)
