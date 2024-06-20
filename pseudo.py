@@ -37,11 +37,6 @@ class PseudoSchedular:
         self.schedular_dir = schedular_dir
         self.focused_metric = focused_metric
         self._sample_rate = initial_sample_rate
-        # self._sample_rates = {
-        #     "initial": {"step": 0, "value": initial_sample_rate},
-        #     "last": {"step": None, "value": None},
-        #     "current": {"step": None, "value": None},
-        # }
         self.sample_rate_delta = sample_rate_delta
         self.metric_delta_threshold = metric_delta_threshold
         self.metric_data = {
@@ -89,46 +84,10 @@ class PseudoSchedular:
 
     @property
     def sample_rate(self):
-
         if not self.is_active():
             return 0.0
         else:
             return self._sample_rate
-
-        initial_rate = self._sample_rates["initial"]["value"]
-
-        if self._current_step != self._sample_rates["current"]["step"]:
-            if self._sample_rates["current"]["step"] is None:
-                self._sample_rates["current"] = {
-                    "step": self._current_step,
-                    "value": initial_rate,
-                }
-            else:
-                last_val = self.metric_data["last"].get("value") or 0.0
-                current_val = self.metric_data["current"].get("value") or 0.0
-                delta = current_val - last_val
-
-                if delta > self.metric_delta_threshold:
-                    delta_sample_rate = self.sample_rate_delta
-                elif delta <= -1 * self.metric_delta_threshold:
-                    delta_sample_rate = -1 * self.sample_rate_delta
-                else:
-                    delta_sample_rate = 0
-
-                last_sample_rate = self._sample_rates["last"].get("value") or initial_rate
-                sample_rate = last_sample_rate + delta_sample_rate
-
-                if sample_rate <= 0 or sample_rate >= 1:
-                    sample_rate = last_sample_rate
-
-                self._sample_rates["last"]["step"] = self._sample_rates["current"]["step"]
-                self._sample_rates["last"]["value"] = self._sample_rates["current"]["value"]
-                self._sample_rates["current"] = {
-                    "step": self._current_step,
-                    "value": sample_rate
-                }
-
-        return self._sample_rates["current"]["value"]
 
     def step(self, update_epoch: bool = False):
         if update_epoch:
@@ -160,7 +119,7 @@ class PseudoSchedular:
             last_sample_rate = self._sample_rate
             sample_rate = last_sample_rate + delta_sample_rate
 
-            if sample_rate <= 0 or sample_rate >= 1:
+            if sample_rate <= 0.000001 or sample_rate >= 1 - 0.000001:
                 sample_rate = last_sample_rate
 
             self._sample_rate = sample_rate

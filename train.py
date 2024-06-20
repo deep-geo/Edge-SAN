@@ -297,7 +297,6 @@ def main(args):
     if resume_chkpt:
         with open(resume_chkpt, "rb") as f:
             checkpoint = torch.load(f, map_location=args.device)
-            # model.load_state_dict(checkpoint['model']) --- loaded already using sam_model_registry
             optimizer.load_state_dict(checkpoint['optimizer'].state_dict())
             resume_epoch = checkpoint["epoch"]
 
@@ -433,7 +432,6 @@ def main(args):
     if pseudo_schedular.is_active():
         pseudo_schedular.update_metrics(global_metrics_dict)
 
-    # wandb.log(global_metrics_dict, step=global_step, commit=True)
     wandb.log(global_metrics_dict, step=global_step, commit=True)
     global_metrics_dict = {}
     
