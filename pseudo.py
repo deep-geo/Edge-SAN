@@ -119,7 +119,7 @@ class PseudoSchedular:
                 if last_sample_rate >= 1 - self.sample_rate_delta:
                     delta_sample_rate = (1 - last_sample_rate) / 2.0
                 elif last_sample_rate <= self.sample_rate_delta:
-                    delta_sample_rate = self.sample_rate_delta / 2.0
+                    delta_sample_rate = -1 * self.sample_rate_delta / 2.0
                 else:
                     delta_sample_rate = self.sample_rate_delta
 
