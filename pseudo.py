@@ -109,12 +109,20 @@ class PseudoSchedular:
             current_val = self.metric_data["current"].get("value") or 0.0
             delta = current_val - last_val
 
-            if delta <= -1 * self.metric_delta_threshold:
+            last_sample_rate = self._sample_rate
+
+            if delta >= self.metric_delta_threshold:
+                delta_sample_rate = self.sample_rate_delta
+            elif delta <= -1 * self.metric_delta_threshold:
                 delta_sample_rate = -1 * self.sample_rate_delta
             else:
-                delta_sample_rate = self.sample_rate_delta
+                if last_sample_rate >= 1 - self.sample_rate_delta:
+                    delta_sample_rate = (1 - last_sample_rate) / 2.0
+                elif last_sample_rate <= self.sample_rate_delta:
+                    delta_sample_rate = self.sample_rate_delta / 2.0
+                else:
+                    delta_sample_rate = self.sample_rate_delta
 
-            last_sample_rate = self._sample_rate
             sample_rate = last_sample_rate + delta_sample_rate
 
             if sample_rate <= 0.000001 or sample_rate >= 1 - 0.000001:
