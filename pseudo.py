@@ -43,6 +43,8 @@ class PseudoSchedular:
             "last": {"step": None, "value": None},
             "current": {"step": None, "value": None}
         }
+        self.accumulated_metric_change_plus = 0.0
+        self.accumulated_metric_change_minus = 0.0
         self.current_epoch = current_epoch
         self.start_epoch = start_epoch
         self._step = step
@@ -111,8 +113,25 @@ class PseudoSchedular:
 
             if delta <= -1 * self.metric_delta_threshold:
                 delta_sample_rate = -1 * self.sample_rate_delta
-            else:
+            elif delta > self.metric_delta_threshold:
                 delta_sample_rate = self.sample_rate_delta
+            else:
+                if delta >= 0:
+                    self.accumulated_metric_change_plus += delta
+                else:
+                    self.accumulated_metric_change_minus += delta
+                if self.accumulated_metric_change_plus >= self.metric_delta_threshold:
+                    val = self.accumulated_metric_change_plus
+                    delta_sample_rate = self.sample_rate_delta
+                    self.accumulated_metric_change_plus -= self.metric_delta_threshold
+                    print(f"accumulated change_plus: {val} -> {self.accumulated_metric_change_plus}")
+                elif self.accumulated_metric_change_minus <= -1 * self.metric_delta_threshold:
+                    val = self.accumulated_metric_change_minus
+                    delta_sample_rate = -1 * self.sample_rate_delta
+                    self.accumulated_metric_change_minus += self.metric_delta_threshold
+                    print(f"accumulated change_minus: {val} -> {self.accumulated_metric_change_minus}")
+                else:
+                    delta_sample_rate = 0.0
 
             last_sample_rate = self._sample_rate
             sample_rate = last_sample_rate + delta_sample_rate
