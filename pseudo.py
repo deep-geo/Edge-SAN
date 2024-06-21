@@ -33,7 +33,7 @@ class PseudoSchedular:
                  initial_sample_rate: float, sample_rate_delta: float,
                  metric_delta_threshold: float, current_epoch: int, step: int,
                  start_epoch: int, pseudo_weight: float,
-                 pseudo_weight_gr: float = 0.0, alpha: float = 0.8):
+                 pseudo_weight_gr: float = 0.0, alpha: float = 0.9):
         self.schedular_dir = schedular_dir
         self.focused_metric = focused_metric
         self._sample_rate = initial_sample_rate
