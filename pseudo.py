@@ -33,7 +33,7 @@ class PseudoSchedular:
                  initial_sample_rate: float, sample_rate_delta: float,
                  metric_delta_threshold: float, current_epoch: int, step: int,
                  start_epoch: int, pseudo_weight: float,
-                 pseudo_weight_gr: float = 0.0):
+                 pseudo_weight_gr: float = 0.0, alpha: float = 0.8):
         self.schedular_dir = schedular_dir
         self.focused_metric = focused_metric
         self._sample_rate = initial_sample_rate
@@ -45,6 +45,7 @@ class PseudoSchedular:
         }
         self.accumulated_metric_change_plus = 0.0
         self.accumulated_metric_change_minus = 0.0
+        self.alpha = alpha
         self.current_epoch = current_epoch
         self.start_epoch = start_epoch
         self._step = step
@@ -120,10 +121,11 @@ class PseudoSchedular:
                     self.accumulated_metric_change_plus += delta
                 else:
                     self.accumulated_metric_change_minus += delta
-                if self.accumulated_metric_change_plus >= self.metric_delta_threshold:
+
+                if self.accumulated_metric_change_plus >= self.alpha * self.metric_delta_threshold:
                     val = self.accumulated_metric_change_plus
                     delta_sample_rate = self.sample_rate_delta
-                    self.accumulated_metric_change_plus -= self.metric_delta_threshold
+                    self.accumulated_metric_change_plus -= self.alpha * self.metric_delta_threshold
                     print(f"accumulated change_plus: {val} -> {self.accumulated_metric_change_plus}")
                 elif self.accumulated_metric_change_minus <= -1 * self.metric_delta_threshold:
                     val = self.accumulated_metric_change_minus
