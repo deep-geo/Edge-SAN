@@ -506,8 +506,11 @@ def create_pseudo_datafolder(data_root: str, pseudo_root: str, dst_size: int):
     label_paths = []
     for path in tqdm.tqdm(img_paths, desc="preparing unsupervised data"):
         img = cv2.imread(path)
-        transform = get_transform(dst_size, img.shape[0], img.shape[1])
-        dst_img = transform(image=img)["image"]
+        if img.shape[0] == dst_size and img.shape[1] == dst_size:
+            dst_img = img
+        else:
+            transform = get_transform(dst_size, img.shape[0], img.shape[1])
+            dst_img = transform(image=img)["image"]
         basename = os.path.basename(path)
         dst_path = os.path.join(pseudo_data_dir, basename)
         cv2.imwrite(dst_path, dst_img)
