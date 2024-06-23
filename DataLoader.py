@@ -1,6 +1,7 @@
 import copy
 import os
 import json
+import math
 import random
 import cv2
 import glob
@@ -490,7 +491,7 @@ class CombineBatchSampler(Sampler):
         if self.drop_last:
             return (self.gt_dataset_len + self.pseudo_dataset_len) // self.batch_size
         else:
-            return (self.gt_dataset_len + self.pseudo_dataset_len + self.batch_size - 1) // self.batch_size
+            return math.ceil((self.gt_dataset_len + self.pseudo_dataset_len) / self.batch_size)
 
 
 def create_pseudo_datafolder(data_root: str, pseudo_root: str, dst_size: int):
