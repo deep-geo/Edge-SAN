@@ -213,7 +213,7 @@ class TrainingDataset(Dataset):
                 image = cv2.imread(image_path)
                 image = (image - self.pixel_mean) / self.pixel_std
             except:
-                print("read image error: ", self.image_paths[index])
+                # print("read image error: ", self.image_paths[index])
                 index = random.choice(range(self.__len__()))
                 continue
 
@@ -230,14 +230,14 @@ class TrainingDataset(Dataset):
             if not os.path.exists(mask_path):
                 old_index = index
                 index = random.choice(range(self.__len__()))
-                print(f"mask {old_index} not exists, randon select {index}")
+                # print(f"mask {old_index} not exists, randon select {index}")
                 continue
             original_mask = np.load(mask_path).astype(np.float32)
             mask_vals = [_ for _ in np.unique(original_mask) if _ != 0]
             if not mask_vals:
                 old_index = index
                 index = random.choice(range(self.__len__()))
-                print(f"mask {old_index} is empty, randon choose {index}")
+                # print(f"mask {old_index} is empty, randon choose {index}")
                 continue
             choices_nuclei = random.choices(mask_vals, k=self.mask_num)
 
