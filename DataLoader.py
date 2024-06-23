@@ -4,6 +4,7 @@ import json
 import math
 import random
 import cv2
+import tqdm
 import glob
 import torch
 import numpy as np
@@ -503,7 +504,7 @@ def create_pseudo_datafolder(data_root: str, pseudo_root: str, dst_size: int):
     img_paths = glob.glob(os.path.join(data_root, "*.png"))
     data_paths = []
     label_paths = []
-    for path in img_paths:
+    for path in tqdm.tqdm(img_paths, desc="preparing unsupervised data"):
         img = cv2.imread(path)
         transform = get_transform(dst_size, img.shape[0], img.shape[1])
         dst_img = transform(image=img)["image"]
