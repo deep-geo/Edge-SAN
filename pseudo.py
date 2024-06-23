@@ -414,7 +414,9 @@ def generate_pseudo_batches(args, model, pseudo_iter: PseudoIndicesIter,
 
     data_list = [(os.path.join(pseudo_root, dp), os.path.join(pseudo_root, lp))
                  for dp, lp in data_list]
-    pbar = tqdm(total=dst_total, desc=f"generating {dst_total} masks from {pseudo_dataset_len} pseudo data")
+    pbar = tqdm(total=dst_total,
+                ascii=True, mininterval=0.5,
+                desc=f"generating {dst_total} masks from {pseudo_dataset_len} pseudo data")
     for idx in pseudo_iter:
 
         info["total"] += 1
