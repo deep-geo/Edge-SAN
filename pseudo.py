@@ -130,18 +130,18 @@ class PseudoSchedular:
                     val = self.accumulated_metric_change_plus
                     delta_sample_rate = self.sample_rate_delta
                     self.accumulated_metric_change_plus -= self.alpha * self.metric_delta_threshold
-                    print(f"accumulated change_plus: {val} -> {self.accumulated_metric_change_plus}")
+                    # print(f"accumulated change_plus: {val} -> {self.accumulated_metric_change_plus}")
                 elif self.accumulated_metric_change_minus <= -1 * self.metric_delta_threshold:
                     val = self.accumulated_metric_change_minus
                     delta_sample_rate = -1 * self.sample_rate_delta
                     self.accumulated_metric_change_minus += self.metric_delta_threshold
-                    print(f"accumulated change_minus: {val} -> {self.accumulated_metric_change_minus}")
+                    # print(f"accumulated change_minus: {val} -> {self.accumulated_metric_change_minus}")
                 else:
                     delta_sample_rate = 0.0
 
-            sample_rate = last_sample_rate + delta_sample_rate
+            sample_rate = min(last_sample_rate + delta_sample_rate, 0.99)
 
-            if sample_rate <= 0.000001 or sample_rate >= 1 - 0.000001:
+            if sample_rate <= 0.000001:
                 sample_rate = last_sample_rate
 
             self._sample_rate = sample_rate

@@ -465,11 +465,13 @@ class CombineBatchSampler(Sampler):
                     else:
                         random.shuffle(self.indices_pseudo_ready)
                         self.set_pseudo_indices_to_use(self.indices_pseudo_ready)
+                        continue
             else:
                 try:
                     idx = next(iter_gt)
                 except StopIteration:
                     finished_gt = True
+                    continue
 
             batch.append(idx)
             if len(batch) == self.batch_size:

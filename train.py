@@ -183,7 +183,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
         if args.activate_unsupervised:
             pseudo_list = batched_input["pseudo"].cpu().to(torch.int).tolist()
-            print(f"pseudo_list: {pseudo_list}")
+            # print(f"pseudo_list: {pseudo_list}")
             global_pseudo_counts += pseudo_list
 
         loss = criterion(masks, labels, iou_predictions, pseudo_weights)
@@ -275,7 +275,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
 
                 last_val = pseudo_schedular.metric_data["last"].get("value") or 0.0
                 current_val = pseudo_schedular.metric_data["current"].get("value") or 0.0
-                print(f"\nupdate: bar total = {pbar.total}, focused_metric_change = {current_val - last_val}, pseudo sample_rate = {train_loader.batch_sampler.sample_rate}")
+                # print(f"\nupdate: bar total = {pbar.total}, focused_metric_change = {current_val - last_val}, pseudo sample_rate = {train_loader.batch_sampler.sample_rate}")
 
                 global_metrics_dict["Pseudo/sample_rate"] = pseudo_schedular.sample_rate
                 if not global_pseudo_counts:
@@ -500,27 +500,6 @@ def main(args):
 
         if pseudo_schedular is not None:
             pseudo_schedular.step(update_epoch=True)
-        #     if pseudo_schedular.sample_rate > 0.0:
-        #         train_loader.batch_sampler.set_sample_rate(
-        #             pseudo_schedular.sample_rate
-        #         )
-        #         sample_total = int(pseudo_total * pseudo_schedular.sample_rate)
-        #         pseudo_batch_indices, pseudo_batches_info = \
-        #             generate_pseudo_batches(
-        #                 args, model, pseudo_iter, gt_total,
-        #                 pseudo_total, pseudo_root, sample_total
-        #             )
-        #         for key, val in pseudo_batches_info.items():
-        #             global_metrics_dict[f"Pseudo/{key}"] = val
-        #         train_loader.batch_sampler.set_pseudo_indices_to_use(
-        #             pseudo_batch_indices
-        #         )
-        #
-        # if args.activate_unsupervised:
-        #     global_metrics_dict["Pseudo/weight"] = pseudo_schedular.pseudo_weight
-        #
-        # wandb.log(global_metrics_dict, step=global_step, commit=True)
-        # global_metrics_dict = {}
 
 
 if __name__ == '__main__':
