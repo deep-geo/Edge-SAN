@@ -178,9 +178,13 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         if args.activate_unsupervised and args.unsupervised_weight_gr:
             pseudos = (batched_input["pseudo"].unsqueeze(1).
                        repeat(1, args.mask_num).reshape(-1))
-            global_pseudo_counts += batched_input["pseudo"].cpu().to(torch.int).tolist()
             pseudo_weights = torch.ones(size=pseudos.shape, device=args.device)
             pseudo_weights[pseudos] = pseudo_schedular.pseudo_weight
+
+        if args.activate_unsupervised:
+            pseudo_list = batched_input["pseudo"].cpu().to(torch.int).tolist()
+            print(f"pseudo_list: {pseudo_list}")
+            global_pseudo_counts += pseudo_list
 
         loss = criterion(masks, labels, iou_predictions, pseudo_weights)
         loss.backward(retain_graph=False)
