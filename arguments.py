@@ -25,7 +25,7 @@ def parse_train_args():
         "--epochs", type=int, default=100000, help="number of epochs"
     )
     parser.add_argument(
-        "--log_interval", type=int, default=100, help="log frequency"
+        "--eval_interval", type=int, default=100, help="log frequency"
     )
     parser.add_argument(
         "--batch_size", type=int, default=8, help="train batch size"
@@ -110,11 +110,7 @@ def parse_train_args():
         "--unsupervised_only", action="store_true", help="activate unsupervised"
     )
     parser.add_argument(
-        "--unsupervised_dir", type=str, help="dir cointaining unsupervised data"
-    )
-    parser.add_argument(
-        "--unsupervised_num_processes", type=int, default=2,
-        help="processes to generate pseudo masks"
+        "--unsupervised_dir", type=str, help="dir containing unsupervised data"
     )
     parser.add_argument(
         "--unsupervised_start_epoch", type=int, default=0,
@@ -167,85 +163,6 @@ def parse_train_args():
 
     args = parser.parse_args()
     args.checkpoint = args.resume or args.checkpoint
-
-    return args
-
-
-def parse_inference_args():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--work_dir", type=str, default="workdir")
-    parser.add_argument("--run_name", type=str, default="run")
-
-    parser.add_argument("--random_seed", type=int, default=42)
-
-    # model
-    parser.add_argument("--sam_checkpoint", type=str, help="vanilla sam checkpoint")
-    parser.add_argument("--checkpoint", type=str, help="custom checkpoint")
-
-    parser.add_argument("--model_type", type=str, default="vit_b",
-                        help="sam model_type")
-    parser.add_argument('--device', type=str, default='cpu',
-                        help="cuda or cpu")
-    parser.add_argument("--image_size", type=int, default=256)
-    parser.add_argument("--predict_masks", action='store_true',
-                        help="predict masks or not")
-
-    # data loader
-    parser.add_argument("--data_root", type=str, default="",
-                        help="Directory of the inference dataset.")
-    parser.add_argument("--batch_size", type=int, default=8)
-
-    parser.add_argument("--num_workers", type=int, default=8,
-                        help="Dataloader workers")
-
-    # metrics
-    parser.add_argument(
-        "--metrics",
-        nargs='+',
-        default=['iou', 'dice', 'precision', 'f1_score', 'recall',
-                 'specificity', 'accuracy', 'aji', 'dq', 'sq', 'pq'],
-        help="metrics"
-    )
-    parser.add_argument(
-        "--pred_iou_thresh", type=float, default=0.88,
-        help="Mask filtering threshold in [0,1]"
-    )
-    parser.add_argument(
-        "--stability_score_thresh", type=float, default=0.95,
-        help="Mask filtering threshold in [0,1]"
-    )
-    parser.add_argument(
-        "--points_per_side", type=int, default=32, help="arg for mask generator"
-    )
-    parser.add_argument(
-        "--points_per_batch", type=float, default=256,
-        help="arg for mask generator"
-    )
-    parser.add_argument(
-        "--boxes_prompt", action='store_true', help="use boxes prompt"
-    )
-    parser.add_argument(
-        "--point_num", type=int, default=1, help="point num"
-    )
-    parser.add_argument(
-        "--iter_point", type=int, default=8, help="point iterations"
-    )
-    parser.add_argument(
-        "--multimask", action='store_true', help="ouput multimask"
-    )
-    # parser.add_argument(
-    #   "--encoder_adapter", action='store_true', help="use adapter"
-    # )
-    parser.add_argument(
-        "--prompt_path", type=str, default=None, help="fix prompt path"
-    )
-    parser.add_argument(
-        "--save_pred", action='store_true', help="save result"
-    )
-
-    args = parser.parse_args()
-    args.encoder_adapter = True
 
     return args
 

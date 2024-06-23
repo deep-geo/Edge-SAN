@@ -7,7 +7,7 @@ python train.py \
 --epochs 100000 \
 --batch_size 8 \
 --num_workers 8 \
---log_interval 100 \
+--eval_interval 100 \
 --test_sample_rate 1.0 \
 --image_size 256 \
 --mask_num 5 \
@@ -31,9 +31,8 @@ python train.py \
 --unsupervised_weight 1.0 \
 --unsupervised_weight_gr 0.0 \
 --unsupervised_initial_sample_rate 0.1 \
---unsupervised_sample_rate_delta 0.1 \
+--unsupervised_sample_rate_delta 0.05 \
 --unsupervised_metric_delta_threshold 0.01 \
---unsupervised_num_processes 2 \
 --unsupervised_focused_metric "Overall/dice" \
 --pred_iou_thresh 0.88 \
 --stability_score_thresh 0.95 \

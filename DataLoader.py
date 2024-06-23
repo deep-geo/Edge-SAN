@@ -3,12 +3,15 @@ import os
 import json
 import random
 import cv2
+import glob
 import torch
 import numpy as np
 import albumentations as A
 
+from typing import List
 from albumentations.pytorch import ToTensorV2
-from utils import get_boxes_from_mask, init_point_sampling, get_edge_points_from_mask
+from utils import get_boxes_from_mask, init_point_sampling, \
+    get_edge_points_from_mask, get_transform
 from torch.utils.data import Dataset, DataLoader, Sampler
 from preprocess.split_dataset import split_dataset
 
@@ -224,10 +227,17 @@ class TrainingDataset(Dataset):
             # mask_path = random.choices(self.label_paths[index], k=self.mask_num)
 
             mask_path = self.label_paths[index]
+            if not os.path.exists(mask_path):
+                old_index = index
+                index = random.choice(range(self.__len__()))
+                print(f"mask {old_index} not exists, randon select {index}")
+                continue
             original_mask = np.load(mask_path).astype(np.float32)
             mask_vals = [_ for _ in np.unique(original_mask) if _ != 0]
             if not mask_vals:
+                old_index = index
                 index = random.choice(range(self.__len__()))
+                print(f"mask {old_index} is empty, randon choose {index}")
                 continue
             choices_nuclei = random.choices(mask_vals, k=self.mask_num)
 
@@ -419,52 +429,56 @@ class CombineBatchSampler(Sampler):
                  batch_size: int, sample_rate: float, drop_last: bool = False):
         self.gt_dataset_len = gt_dataset_len
         self.pseudo_dataset_len = pseudo_dataset_len
+        self.indices_pseudo = self._create_pseudo_indices()
+        self.indices_pseudo_ready = []
+        self.pseudo_iter = None
+        self.set_pseudo_indices_to_use(self.indices_pseudo_ready)
         self.batch_size = batch_size
         assert 0.0 <= sample_rate <= 1.0
         self.sample_rate = sample_rate
         self.drop_last = drop_last
 
+    def _create_pseudo_indices(self):
+        indices_pseudo = list(range(self.gt_dataset_len,
+                                    self.gt_dataset_len + self.pseudo_dataset_len))
+        random.shuffle(indices_pseudo)
+        return indices_pseudo
+
+    def set_pseudo_indices_to_use(self, indices: List[int]):
+        self.indices_pseudo_ready = indices
+        self.pseudo_iter = iter(self.indices_pseudo_ready)
+
     def __iter__(self):
         indices_gt = list(range(self.gt_dataset_len))
-        indices_pseudo = list(range(self.gt_dataset_len,
-                              self.gt_dataset_len + self.pseudo_dataset_len))
-
         random.shuffle(indices_gt)
-        random.shuffle(indices_pseudo)
-
-        iter0 = iter(indices_gt)
-        iter1 = iter(indices_pseudo)
+        iter_gt = iter(indices_gt)
 
         batch = []
         finished_gt = False
         while True:
             if finished_gt or random.random() < self.sample_rate:
                 try:
-                    idx = next(iter1)
+                    idx = next(self.pseudo_iter)
                 except StopIteration:
                     if finished_gt:
                         break
-                    # if self.sample_rate == 1.0 and finished_gt:
-                    #     break
                     else:
-                        random.shuffle(indices_pseudo)
-                        iter1 = iter(indices_pseudo)
+                        random.shuffle(self.indices_pseudo_ready)
+                        self.set_pseudo_indices_to_use(self.indices_pseudo_ready)
             else:
                 try:
-                    idx = next(iter0)
+                    idx = next(iter_gt)
                 except StopIteration:
                     finished_gt = True
-                    # if self.sample_rate < 1.0:
-                    #     break
-                    # else:
-                    #     continue
 
             batch.append(idx)
             if len(batch) == self.batch_size:
+                # print("batch = ", batch)
                 yield batch
                 batch = []
 
         if len(batch) > 0 and not self.drop_last:
+            # print("batch = ", batch)
             yield batch
 
     def set_sample_rate(self, sample_rate: float):
@@ -477,3 +491,35 @@ class CombineBatchSampler(Sampler):
             return (self.gt_dataset_len + self.pseudo_dataset_len + self.batch_size - 1) // self.batch_size
 
 
+def create_pseudo_datafolder(data_root: str, pseudo_root: str, dst_size: int):
+    pseudo_data_dir = os.path.join(pseudo_root, "data")
+    pseudo_label_dir = os.path.join(pseudo_root, "label")
+    os.makedirs(pseudo_data_dir, exist_ok=True)
+    os.makedirs(pseudo_label_dir, exist_ok=True)
+
+    img_paths = glob.glob(os.path.join(data_root, "*.png"))
+    data_paths = []
+    label_paths = []
+    for path in img_paths:
+        img = cv2.imread(path)
+        transform = get_transform(dst_size, img.shape[0], img.shape[1])
+        dst_img = transform(image=img)["image"]
+        basename = os.path.basename(path)
+        dst_path = os.path.join(pseudo_data_dir, basename)
+        cv2.imwrite(dst_path, dst_img)
+
+        data_paths.append(os.path.join("data", basename))
+        label_paths.append(os.path.join("label", basename[:-4] + ".npy"))
+
+    split_json = {
+        "seed": None,
+        "test_size": 0,
+        "quantity": {"train": len(data_paths), "test": 0, "total": len(data_paths)},
+        "train": [(dp, lp) for dp, lp in zip(data_paths, label_paths)],
+        "test": []
+    }
+    split_path = os.path.join(pseudo_root, "split.json")
+    with open(split_path, "w") as f:
+        json.dump(split_json, f, indent=2)
+
+    return split_path, split_json

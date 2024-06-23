@@ -21,7 +21,7 @@ import numpy as np
 import torch
 import torch.multiprocessing as mp
 
-from typing import List
+from typing import List, Tuple
 from tqdm import tqdm
 from preprocess.split_dataset import split_dataset
 from utils import get_transform, calc_step, MaskPredictor
@@ -223,6 +223,38 @@ def progress(info_json: str, total: int, lock):
                 break
 
 
+class PseudoIndicesIter:
+
+    def __init__(self, pseudo_indices: List[int]):
+        self.pseudo_indices = pseudo_indices
+
+    def __iter__(self):
+        indices = list(range(len(self.pseudo_indices)))
+        random.shuffle(indices)
+        pseudo_iter = iter(indices)
+        while True:
+            try:
+                idx = next(pseudo_iter)
+                yield self.pseudo_indices[idx]
+            except StopIteration:
+                indices = list(range(len(self.pseudo_indices)))
+                random.shuffle(indices)
+                pseudo_iter = iter(indices)
+
+    def get_indices(self, total: int):
+        indices = []
+
+        if total == 0:
+            return indices
+
+        for idx in self:
+            indices.append(idx)
+            if len(indices) == total:
+                break
+
+        return indices
+
+
 @torch.no_grad()
 def generate_pseudo(args, model, img_paths: List[str], pseudo_root: str,
                     info_path: str, lock, n_save: int = 100,
@@ -349,3 +381,76 @@ def generate_pseudo_multiple(args, model, pseudo_root: str):
     print("pseudo masks info: \n", json.dumps(pseudo_info, indent=2))
 
     return split_path, pseudo_info
+
+
+@torch.no_grad()
+def generate_pseudo_batches(args, model, pseudo_iter: PseudoIndicesIter,
+                            gt_dataset_len: int, pseudo_dataset_len: int,
+                            pseudo_root: str, dst_total: int) -> Tuple[List[int], dict]:
+    indices = []
+    info = {"total": 0, "instances": 0, "empty": 0}
+
+    if dst_total == 0:
+        return indices, info
+
+    model.eval()
+    mask_predictor = MaskPredictor(
+        model=model,
+        pred_iou_thresh=args.pred_iou_thresh,
+        stability_score_thresh=args.stability_score_thresh,
+        min_mask_region_area=10,
+        points_per_side=args.points_per_side,
+        points_per_batch=args.points_per_batch
+    )
+
+    pseudo_label_dir = os.path.join(pseudo_root, "label")
+    if os.path.exists(pseudo_label_dir):
+        shutil.rmtree(pseudo_label_dir)
+    os.makedirs(pseudo_label_dir)
+
+    split_path = os.path.join(pseudo_root, "split.json")
+    with open(split_path) as f:
+        data_list = json.load(f)["train"]
+
+    data_list = [(os.path.join(pseudo_root, dp), os.path.join(pseudo_root, lp))
+                 for dp, lp in data_list]
+    pbar = tqdm(total=dst_total, desc=f"generating {dst_total} masks from {pseudo_dataset_len} pseudo data")
+    for idx in pseudo_iter:
+
+        info["total"] += 1
+
+        pseudo_idx = idx - gt_dataset_len
+        img_path, mask_path = data_list[pseudo_idx]
+        image = cv2.imread(img_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        mask = mask_predictor.predict(image)
+
+        vals = [_ for _ in np.unique(mask) if _ != 0]
+        if len(vals) == 0:
+            info["empty"] += 1
+            pbar.set_postfix(
+                ok=info["total"] - info["empty"],
+                empty=info["empty"],
+                total=info["total"]
+            )
+            continue
+
+        indices.append(idx)
+
+        pbar.update()
+        pbar.set_postfix(
+            ok=info["total"] - info["empty"],
+            empty=info["empty"],
+            total=info["total"]
+        )
+
+        info["instances"] += len(vals)
+        np.save(mask_path, mask)
+
+        if info["total"] - info["empty"] == dst_total:
+            break
+
+    info["miss_rate"] = info["empty"] / info["total"] if info["total"] else 0.0
+    info["average_instances"] = info["instances"] / info["total"] if info["total"] else 0.0
+
+    return indices, info

@@ -11,14 +11,15 @@ from segment_anything import sam_model_registry
 from torch import optim
 from torch.utils.data import DataLoader
 from DataLoader import TrainingDataset, TestingDataset, TrainingDatasetFolder, \
-    TestingDatasetFolder, stack_dict_batched, CombineBatchSampler
+    TestingDatasetFolder, stack_dict_batched, CombineBatchSampler, create_pseudo_datafolder
 from utils import get_logger, generate_point, setting_prompt_none, save_masks, \
     postprocess_masks, to_device, prompt_and_decoder
 from loss import FocalDiceloss_IoULoss
 from arguments import parse_train_args
 from metrics import SegMetrics, AggregatedMetrics
 from tqdm import tqdm
-from pseudo import PseudoSchedular, generate_pseudo_multiple
+from pseudo import PseudoSchedular, generate_pseudo_multiple, \
+    generate_pseudo_batches, PseudoIndicesIter
 import torch.multiprocessing as mp
 
 
@@ -27,6 +28,7 @@ max_num_chkpt = 3
 global_step = 0
 global_metrics_dict = {}
 global_train_losses = []
+global_pseudo_counts = []
 
 
 @torch.no_grad()
@@ -120,11 +122,13 @@ def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
 
 
 def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
-                    pseudo_schedular, test_loader):
+                    pseudo_schedular, test_loader, pseudo_iter: PseudoIndicesIter,
+                    gt_total, pseudo_total, pseudo_root):
 
     global global_metrics_dict
     global global_step
     global global_train_losses
+    global global_pseudo_counts
 
     pbar = tqdm(total=len(train_loader), desc="Training", mininterval=0.5)
     pseudo_weights = None
@@ -138,6 +142,8 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             break
 
         global_step += 1
+        # if global_step == 31:
+        #     break
         batched_input = stack_dict_batched(batched_input)
         batched_input = to_device(batched_input, args.device)
 
@@ -172,6 +178,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         if args.activate_unsupervised and args.unsupervised_weight_gr:
             pseudos = (batched_input["pseudo"].unsqueeze(1).
                        repeat(1, args.mask_num).reshape(-1))
+            global_pseudo_counts += batched_input["pseudo"].cpu().to(torch.int).tolist()
             pseudo_weights = torch.ones(size=pseudos.shape, device=args.device)
             pseudo_weights[pseudos] = pseudo_schedular.pseudo_weight
 
@@ -226,7 +233,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         pbar.update()
         pbar.set_postfix(train_loss=loss.item(), pseudo_rate=pseudo_schedular.sample_rate, epoch=epoch)
 
-        if global_step % args.log_interval == 0:
+        if global_step % args.eval_interval == 0:
             average_test_loss, test_metrics_overall, test_metrics_datasets = \
                 eval_model(args, model, test_loader, output_dataset_metrics=True)
 
@@ -245,24 +252,46 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                 pseudo_schedular.step(update_epoch=False)
                 pseudo_schedular.update_metrics(global_metrics_dict)
                 train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
-                pbar.total = len(train_loader.batch_sampler)
+
+                if pseudo_schedular.sample_rate > 0.0:
+                    sample_total = int(pseudo_total * pseudo_schedular.sample_rate)
+                    pseudo_batch_indices, pseudo_batches_info = \
+                        generate_pseudo_batches(
+                            args, model, pseudo_iter, gt_total, pseudo_total,
+                            pseudo_root, sample_total
+                        )
+
+                    for key, val in pseudo_batches_info.items():
+                        global_metrics_dict[f"Pseudo/{key}"] = val
+
+                    train_loader.batch_sampler.set_pseudo_indices_to_use(
+                        pseudo_batch_indices)
+                    train_loader.batch_sampler.set_sample_rate(
+                        pseudo_schedular.sample_rate)
 
                 last_val = pseudo_schedular.metric_data["last"].get("value") or 0.0
                 current_val = pseudo_schedular.metric_data["current"].get("value") or 0.0
                 print(f"\nupdate: bar total = {pbar.total}, focused_metric_change = {current_val - last_val}, pseudo sample_rate = {train_loader.batch_sampler.sample_rate}")
 
                 global_metrics_dict["Pseudo/sample_rate"] = pseudo_schedular.sample_rate
+                if not global_pseudo_counts:
+                    global_metrics_dict["Pseudo/real_proportion"] = 0.0
+                else:
+                    global_metrics_dict["Pseudo/real_proportion"] = \
+                        sum(global_pseudo_counts) / len(global_pseudo_counts)
 
             wandb.log(global_metrics_dict, step=global_step, commit=True)
 
             global_metrics_dict = {}
             global_train_losses = []
+            global_pseudo_counts = []
 
 
 def main(args):
 
     global global_metrics_dict
     global global_step
+    global global_pseudo_counts
 
     model = sam_model_registry[args.model_type](args).to(args.device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -273,10 +302,14 @@ def main(args):
     run_dir = os.path.join(args.work_dir, "models", args.run_name)
     os.makedirs(run_dir, exist_ok=True)
 
-    if args.lr_scheduler:
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=[5, 10], gamma=0.5)
-        print('*******Use MultiStepLR')
+    # if args.lr_scheduler:
+    #     scheduler = torch.optim.lr_scheduler.MultiStepLR(
+    #         optimizer, milestones=[5, 10], gamma=0.5)
+    #     print('*******Use MultiStepLR')
+
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                     milestones=[5, 10],
+                                                     gamma=0.5)
 
     resume_chkpt = None
     if args.resume:
@@ -355,9 +388,11 @@ def main(args):
 
     print("\ngt dataset length: ", len(train_set_gt))
 
-    # pseudo dataset
     pseudo_schedular = None
-    train_set_pseudo = None
+    gt_total = len(train_set_gt)
+    pseudo_total = 0
+    pseudo_iter = None
+    pseudo_root = None
     if args.activate_unsupervised:
         pseudo_root = os.path.join(run_dir, "pseudo")
         pseudo_data_dir = os.path.join(pseudo_root, "data")
@@ -376,34 +411,45 @@ def main(args):
             pseudo_weight_gr=args.unsupervised_weight_gr
         )
 
-        if pseudo_schedular.is_active():
-            pseudo_split_path, pseudo_info = generate_pseudo_multiple(
-                args, model, pseudo_root
-            )
-            train_set_pseudo = TrainingDataset(
-                split_paths=pseudo_split_path,
-                point_num=1,
-                mask_num=args.mask_num,
-                requires_name=False,
-                is_pseudo=True
-            )
-            for key, val in pseudo_info.items():
-                global_metrics_dict[f"Pseudo/{key}"] = val
+        pseudo_split_path, pseudo_info = create_pseudo_datafolder(
+            args.unsupervised_dir, pseudo_root, args.image_size
+        )
+        pseudo_total = pseudo_info["quantity"]["train"]
 
-    if train_set_pseudo is None:
-        train_loader = DataLoader(train_set_gt, batch_size=args.batch_size,
-                                  shuffle=True, num_workers=args.num_workers)
-    else:
+        pseudo_indices = list(range(gt_total, gt_total + pseudo_total))
+        pseudo_iter = PseudoIndicesIter(pseudo_indices)
+
+        train_set_pseudo = TrainingDataset(
+            split_paths=pseudo_split_path,
+            point_num=1,
+            mask_num=args.mask_num,
+            requires_name=False,
+            is_pseudo=True
+        )
         batch_sampler = CombineBatchSampler(
-            gt_dataset_len=len(train_set_gt),
-            pseudo_dataset_len=len(train_set_pseudo),
+            gt_dataset_len=gt_total,
+            pseudo_dataset_len=pseudo_total,
             batch_size=args.batch_size,
             sample_rate=pseudo_schedular.sample_rate,
             drop_last=False
         )
+        if pseudo_schedular.sample_rate > 0.0:
+            sample_total = int(pseudo_total * pseudo_schedular.sample_rate)
+            pseudo_batch_indices, pseudo_batches_info = \
+                generate_pseudo_batches(
+                    args, model, pseudo_iter, gt_total, pseudo_total,
+                    pseudo_root, sample_total
+                )
+            for key, val in pseudo_batches_info.items():
+                global_metrics_dict[f"Pseudo/{key}"] = val
+            batch_sampler.set_pseudo_indices_to_use(pseudo_batch_indices)
+
         train_loader = DataLoader(train_set_gt + train_set_pseudo,
                                   batch_sampler=batch_sampler,
                                   num_workers=args.num_workers)
+
+    else:
+        train_loader = DataLoader(train_set_gt, num_workers=args.num_workers)
 
     test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size,
                              shuffle=False, num_workers=args.num_workers)
@@ -441,7 +487,8 @@ def main(args):
 
         train_one_epoch(
             args, model, optimizer, train_loader, epoch, criterion,
-            pseudo_schedular, test_loader
+            pseudo_schedular, test_loader, pseudo_iter, gt_total, pseudo_total,
+            pseudo_root
         )
 
         if args.lr_scheduler is not None:
@@ -449,47 +496,27 @@ def main(args):
 
         if pseudo_schedular is not None:
             pseudo_schedular.step(update_epoch=True)
-
-        if args.activate_unsupervised:
-            global_metrics_dict["Pseudo/weight"] = pseudo_schedular.pseudo_weight
-
-        if args.activate_unsupervised:
-            if pseudo_schedular.is_active():
-                pseudo_root = os.path.join(run_dir, "pseudo")
-                pseudo_split_path, pseudo_info = generate_pseudo_multiple(
-                    args, model, pseudo_root
-                )
-                train_set_pseudo = TrainingDataset(
-                    split_paths=pseudo_split_path,
-                    point_num=1,
-                    mask_num=args.mask_num,
-                    requires_name=False,
-                    is_pseudo=True
-                )
-
-                for key, val in pseudo_info.items():
-                    global_metrics_dict[f"Pseudo/{key}"] = val
-        else:
-            train_set_pseudo = None
-
-        if train_set_pseudo is None:
-            train_loader = DataLoader(train_set_gt, batch_size=args.batch_size,
-                                      shuffle=True,
-                                      num_workers=args.num_workers)
-        else:
-            batch_sampler = CombineBatchSampler(
-                gt_dataset_len=len(train_set_gt),
-                pseudo_dataset_len=len(train_set_pseudo),
-                batch_size=args.batch_size,
-                sample_rate=pseudo_schedular.sample_rate,
-                drop_last=False
-            )
-            train_loader = DataLoader(train_set_gt + train_set_pseudo,
-                                      batch_sampler=batch_sampler,
-                                      num_workers=args.num_workers)
-
-        wandb.log(global_metrics_dict, step=global_step, commit=True)
-        global_metrics_dict = {}
+        #     if pseudo_schedular.sample_rate > 0.0:
+        #         train_loader.batch_sampler.set_sample_rate(
+        #             pseudo_schedular.sample_rate
+        #         )
+        #         sample_total = int(pseudo_total * pseudo_schedular.sample_rate)
+        #         pseudo_batch_indices, pseudo_batches_info = \
+        #             generate_pseudo_batches(
+        #                 args, model, pseudo_iter, gt_total,
+        #                 pseudo_total, pseudo_root, sample_total
+        #             )
+        #         for key, val in pseudo_batches_info.items():
+        #             global_metrics_dict[f"Pseudo/{key}"] = val
+        #         train_loader.batch_sampler.set_pseudo_indices_to_use(
+        #             pseudo_batch_indices
+        #         )
+        #
+        # if args.activate_unsupervised:
+        #     global_metrics_dict["Pseudo/weight"] = pseudo_schedular.pseudo_weight
+        #
+        # wandb.log(global_metrics_dict, step=global_step, commit=True)
+        # global_metrics_dict = {}
 
 
 if __name__ == '__main__':
@@ -499,23 +526,25 @@ if __name__ == '__main__':
 
     args.encoder_adapter = True
     # # args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
+    # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
 
     # args.data_root = "/Users/zhaojq/Datasets/ALL_Multi"
-    # args.test_size = 0.1
-    # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
+    # args.test_size = 0.05
+    # args.test_sample_rate = 0.01
+    # args.checkpoint = "epoch0077_test-loss0.1181_sam.pth"
     # args.activate_unsupervised = True
     # args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CoNIC/data"
-    # args.log_interval = 20
-    # args.unsupervised_initial_sample_rate = 0.1
+    # args.eval_interval = 10
+    # args.unsupervised_initial_sample_rate = 0.01
     # # args.unsupervised_weight_gr = 0.1
     # args.batch_size = 4
     # args.num_workers = 1
     # args.points_per_batch = 32
     # args.unsupervised_start_epoch = 1
-    # args.unsupervised_sample_rate_delta = 0.1
+    # args.unsupervised_sample_rate_delta = 0.01
     # args.unsupervised_metric_delta_threshold = 0.01
-    # args.stability_score_thresh = 0.90
-    # args.pred_iou_thresh = 0.80
+    # args.stability_score_thresh = 0.80
+    # args.pred_iou_thresh = 0.75
     # args.unsupervised_focused_metric = "Overall/dice"
 
     main(args)
