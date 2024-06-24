@@ -102,7 +102,7 @@ class Preprocess:
             transforms = train_transforms(self.dst_size, mask.shape[0],
                                           mask.shape[1])
             augments = transforms(image=mask)
-            mask = augments['image']
+            mask = augments['image'].squeeze()
             dst_img_path = os.path.join(
                 self.dst_label_dir,
                 f"{label_name}_{i:05d}.png"
