@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 from abc import abstractmethod
-from utils import calc_step
+from utils import calc_step, train_transforms, get_boxes_from_mask
 
 
 class Preprocess0:
@@ -98,10 +98,21 @@ class Preprocess:
         for i, val in enumerate(vals):
             mask = np.zeros(shape=label.shape, dtype=np.uint8)
             mask[label == val] = 255
+
+            transforms = train_transforms(self.dst_size, mask.shape[0],
+                                          mask.shape[1])
+            augments = transforms(image=mask)
+            mask = augments['image']
             dst_img_path = os.path.join(
                 self.dst_label_dir,
                 f"{label_name}_{i:05d}.png"
             )
+            try:
+                get_boxes_from_mask(mask, max_pixel=0)
+            except:
+                print(f"fail: {dst_img_path}")
+                continue
+
             cv2.imwrite(dst_img_path, mask)
 
     @abstractmethod
