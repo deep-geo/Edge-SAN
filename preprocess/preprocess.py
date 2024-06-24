@@ -102,13 +102,13 @@ class Preprocess:
             transforms = train_transforms(self.dst_size, mask.shape[0],
                                           mask.shape[1])
             augments = transforms(image=mask)
-            mask = augments['image'].squeeze()
+            mask1 = augments['image'].squeeze()
             dst_img_path = os.path.join(
                 self.dst_label_dir,
                 f"{label_name}_{i:05d}.png"
             )
             try:
-                get_boxes_from_mask(mask, max_pixel=0)
+                get_boxes_from_mask(mask1, max_pixel=0)
             except:
                 print(f"fail: {dst_img_path}")
                 continue
