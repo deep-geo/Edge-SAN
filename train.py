@@ -258,12 +258,13 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                 train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
 
                 if pseudo_schedular.sample_rate > 0.0:
-                    sample_total = int(pseudo_total * pseudo_schedular.sample_rate)
+                    sample_total = int(args.eval_interval * pseudo_schedular.sample_rate)
                     pseudo_batch_indices, pseudo_batches_info = \
                         generate_pseudo_batches(
                             args, model, pseudo_iter, gt_total, pseudo_total,
                             pseudo_root, sample_total
                         )
+                    16 * 200
 
                     for key, val in pseudo_batches_info.items():
                         global_metrics_dict[f"Pseudo/{key}"] = val
@@ -438,7 +439,7 @@ def main(args):
             drop_last=False
         )
         if pseudo_schedular.sample_rate > 0.0:
-            sample_total = int(pseudo_total * pseudo_schedular.sample_rate)
+            sample_total = int(args.eval_interval * pseudo_schedular.sample_rate)
             pseudo_batch_indices, pseudo_batches_info = \
                 generate_pseudo_batches(
                     args, model, pseudo_iter, gt_total, pseudo_total,
