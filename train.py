@@ -123,7 +123,7 @@ def eval_model(args, model, test_loader, output_dataset_metrics: bool = False):
 
 def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                     pseudo_schedular, test_loader, pseudo_iter: PseudoIndicesIter,
-                    gt_total, pseudo_total, pseudo_root):
+                    gt_total, pseudo_total, pseudo_root, run_dir):
 
     global global_metrics_dict
     global global_step
@@ -290,6 +290,34 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             global_metrics_dict = {}
             global_train_losses = []
             global_pseudo_counts = []
+
+            # save checkpoints
+            chkpts = [
+                (p, float(re.search(r"test-loss(\d+\.\d+)", os.path.basename(p)).group(1)))
+                for p in glob.glob(os.path.join(run_dir, "*.pth"))
+            ]
+            chkpts = sorted(chkpts, key=lambda x: x[-1])
+            if not chkpts or average_test_loss < chkpts[-1][-1]:
+                save_path = os.path.join(
+                    run_dir,
+                    f"epoch{epoch + 1:04d}_step{global_step}_test-loss{average_test_loss:.4f}_sam.pth"
+                )
+                state = {
+                    'model': model.float().state_dict(),
+                    'optimizer': optimizer,
+                    'train-loss': average_train_loss,
+                    'test-loss': average_test_loss,
+                    'epoch': epoch + 1,
+                    'step': global_step
+                }
+                torch.save(state, save_path)
+                print("\nsave new checkpoint: ", save_path)
+
+                chkpts.append((save_path, average_test_loss))
+                chkpts = sorted(chkpts, key=lambda x: x[-1])
+                for chkpt, _ in chkpts[max_num_chkpt:]:
+                    print("remove checkpoint: ", chkpt)
+                    os.remove(chkpt)
 
 
 def main(args):
@@ -493,7 +521,7 @@ def main(args):
         train_one_epoch(
             args, model, optimizer, train_loader, epoch, criterion,
             pseudo_schedular, test_loader, pseudo_iter, gt_total, pseudo_total,
-            pseudo_root
+            pseudo_root, run_dir
         )
 
         if args.lr_scheduler is not None:
