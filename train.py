@@ -295,9 +295,8 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                 (p, float(re.search(r"test-loss(\d+\.\d+)", os.path.basename(p)).group(1)))
                 for p in glob.glob(os.path.join(run_dir, "*.pth"))
             ]
-            old_chkpts = chkpts
             chkpts = sorted(chkpts, key=lambda x: x[-1], reverse=True)
-            if chkpts and average_test_loss < chkpts[-1][-1]:
+            if not chkpts or average_test_loss < chkpts[-1][-1]:
                 save_path = os.path.join(
                     run_dir,
                     f"epoch{epoch + 1:04d}_step{global_step}_test-loss{average_test_loss:.4f}_sam.pth"
@@ -318,13 +317,6 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                 for chkpt, _ in chkpts[max_num_chkpt:]:
                     print("\nremove checkpoint: ", chkpt)
                     os.remove(chkpt)
-
-                print("\n===========>old_chkpts: \n")
-                for _ in old_chkpts:
-                    print(_)
-                print("\n===========>new_chkpts: \n")
-                for _ in chkpts:
-                    print(_)
 
 
 def main(args):
