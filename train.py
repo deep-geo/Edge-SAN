@@ -297,7 +297,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             ]
             old_chkpts = chkpts
             chkpts = sorted(chkpts, key=lambda x: x[-1], reverse=True)
-            if average_test_loss < chkpts[-1][-1]:
+            if chkpts and average_test_loss < chkpts[-1][-1]:
                 save_path = os.path.join(
                     run_dir,
                     f"epoch{epoch + 1:04d}_step{global_step}_test-loss{average_test_loss:.4f}_sam.pth"
@@ -311,10 +311,12 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                     'step': global_step
                 }
                 torch.save(state, save_path)
+                print("\nsave new checkpoint: ", save_path)
 
                 chkpts.append((save_path, average_test_loss))
                 chkpts = sorted(chkpts, key=lambda x: x[-1], reverse=True)
                 for chkpt, _ in chkpts[max_num_chkpt:]:
+                    print("\nremove checkpoint: ", chkpt)
                     os.remove(chkpt)
 
                 print("\n===========>old_chkpts: \n")
