@@ -315,7 +315,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                 chkpts.append((save_path, average_test_loss))
                 chkpts = sorted(chkpts, key=lambda x: x[-1])
                 for chkpt, _ in chkpts[max_num_chkpt:]:
-                    print("\nremove checkpoint: ", chkpt)
+                    print("remove checkpoint: ", chkpt)
                     os.remove(chkpt)
 
 
