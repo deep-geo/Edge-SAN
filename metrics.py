@@ -331,7 +331,8 @@ class SegMetrics:
     def recall(self):
         key = "_recall"
         if not hasattr(self, key):
-            value = self.tp / (self.tp + self.fn + epsilon)
+            # value = self.tp / (self.tp + self.fn + epsilon)
+            value = self.intersection / (torch.sum(self.gts, dim=[1, 2, 3]) + epsilon)
             setattr(self, key, value)
         return getattr(self, key)
 
