@@ -418,6 +418,7 @@ def prompt_and_decoder(args, batched_input, model, image_embeddings,
                 points=points,
                 boxes=batched_input.get("boxes", None),
                 masks=batched_input.get("mask_inputs", None),
+                cluster_edges=batched_input.get("edges", None)
             )
 
     else:
@@ -425,6 +426,7 @@ def prompt_and_decoder(args, batched_input, model, image_embeddings,
             points=points,
             boxes=batched_input.get("boxes", None),
             masks=batched_input.get("mask_inputs", None),
+            cluster_edges=batched_input.get("edges", None)
         )
 
     low_res_masks, iou_predictions = model.mask_decoder(

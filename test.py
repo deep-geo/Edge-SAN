@@ -42,6 +42,7 @@ def prompt_and_decoder(args, batched_input, ddp_model, image_embeddings):
             points=points,
             boxes=batched_input.get("boxes", None),
             masks=batched_input.get("mask_inputs", None),
+            cluster_edges=batched_input.get("edges", None)
         )
 
         low_res_masks, iou_predictions = ddp_model.mask_decoder(
