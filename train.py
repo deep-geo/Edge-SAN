@@ -389,6 +389,7 @@ def main(args):
             data_root=args.data_root,
             train_size=1-args.test_size,
             point_num=1,
+            edge_point_num=args.edge_point_num,
             mask_num=args.mask_num,
             requires_name=False,
             random_seed=args.seed
@@ -398,6 +399,7 @@ def main(args):
             test_size=args.test_size,
             requires_name=True,
             point_num=args.point_num,
+            edge_point_num=args.edge_point_num,
             return_ori_mask=True,
             prompt_path=args.prompt_path,
             sample_rate=args.test_sample_rate
@@ -406,6 +408,7 @@ def main(args):
         train_set_gt = TrainingDataset(
             split_paths=args.split_paths,
             point_num=1,
+            edge_point_num=args.edge_point_num,
             mask_num=args.mask_num,
             requires_name=False,
             is_pseudo=False
@@ -413,6 +416,7 @@ def main(args):
         test_set = TestingDataset(split_paths=args.split_paths,
                                   requires_name=True,
                                   point_num=args.point_num,
+                                  edge_point_num=args.edge_point_num,
                                   return_ori_mask=True,
                                   prompt_path=args.prompt_path,
                                   sample_rate=args.test_sample_rate)
@@ -455,6 +459,7 @@ def main(args):
         train_set_pseudo = TrainingDataset(
             split_paths=pseudo_split_path,
             point_num=1,
+            edge_point_num=args.edge_point_num,
             mask_num=args.mask_num,
             requires_name=False,
             is_pseudo=True

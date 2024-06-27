@@ -355,7 +355,7 @@ class DatasetFolderMixin:
 class TestingDatasetFolder(TestingDataset, DatasetFolderMixin):
 
     def __init__(self, data_root: str, test_size: float, requires_name=True,
-                 point_num=1, return_ori_mask=True, prompt_path=None,
+                 point_num=1, edge_point_num=3, return_ori_mask=True, prompt_path=None,
                  random_seed: int = 42, sample_rate: float = 1.0):
 
         self.data_root = data_root
@@ -364,7 +364,7 @@ class TestingDatasetFolder(TestingDataset, DatasetFolderMixin):
 
         super().__init__(
             split_paths=self.get_split_paths(), requires_name=requires_name,
-            point_num=point_num, return_ori_mask=return_ori_mask,
+            point_num=point_num, edge_point_num=edge_point_num, return_ori_mask=return_ori_mask,
             prompt_path=prompt_path, sample_rate=sample_rate
         )
 

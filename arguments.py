@@ -81,6 +81,9 @@ def parse_train_args():
         "--point_num", type=int, default=1, help="point num"
     )
     parser.add_argument(
+        "--edge_point_num", type=int, default=3, help="edge_point_num"
+    )
+    parser.add_argument(
         "--iter_point", type=int, default=8, help="point iterations"
     )
     parser.add_argument(
@@ -212,6 +215,9 @@ def parse_test_args():
     )
     parser.add_argument(
         "--point_num", type=int, default=1, help="point num"
+    )
+    parser.add_argument(
+        "--edge_point_num", type=int, default=3, help="edge_point_num"
     )
     parser.add_argument(
         "--iter_point", type=int, default=1, help="iter num"

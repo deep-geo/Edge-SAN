@@ -21,6 +21,7 @@ python train.py \
 --model_type "vit_b" \
 --boxes_prompt \
 --point_num 1 \
+--edge_point_num 3 \
 --iter_point 8 \
 --encoder_adapter \
 --multimask \
