@@ -235,7 +235,10 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
         global_train_losses.append(loss.item())
 
         pbar.update()
-        pbar.set_postfix(train_loss=loss.item(), pseudo_rate=pseudo_schedular.sample_rate, epoch=epoch)
+        if pseudo_schedular is not None:
+            pbar.set_postfix(train_loss=loss.item(), pseudo_rate=pseudo_schedular.sample_rate, epoch=epoch)
+        else:
+            pbar.set_postfix(train_loss=loss.item(), epoch=epoch)
 
         if global_step % args.eval_interval == 0:
             average_test_loss, test_metrics_overall, test_metrics_datasets = \
@@ -252,7 +255,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
             global_metrics_dict["Loss/train"] = average_train_loss
             global_metrics_dict["Loss/test"] = average_test_loss
 
-            if pseudo_schedular.is_active():
+            if pseudo_schedular is not None and pseudo_schedular.is_active():
                 pseudo_schedular.step(update_epoch=False)
                 pseudo_schedular.update_metrics(global_metrics_dict)
                 train_loader.batch_sampler.set_sample_rate(pseudo_schedular.sample_rate)
@@ -264,7 +267,6 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion,
                             args, model, pseudo_iter, gt_total, pseudo_total,
                             pseudo_root, sample_total
                         )
-                    16 * 200
 
                     for key, val in pseudo_batches_info.items():
                         global_metrics_dict[f"Pseudo/{key}"] = val
@@ -487,7 +489,8 @@ def main(args):
                                   num_workers=args.num_workers)
 
     else:
-        train_loader = DataLoader(train_set_gt, num_workers=args.num_workers)
+        train_loader = DataLoader(train_set_gt,  batch_size=args.batch_size,
+                                  num_workers=args.num_workers)
 
     test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size,
                              shuffle=False, num_workers=args.num_workers)
@@ -545,23 +548,23 @@ if __name__ == '__main__':
     # # args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
     # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
 
-    # args.data_root = "/Users/zhaojq/Datasets/ALL_Multi"
-    # args.test_size = 0.05
-    # args.test_sample_rate = 0.01
-    # args.checkpoint = "epoch0077_test-loss0.1181_sam.pth"
-    # args.activate_unsupervised = True
-    # args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CoNIC/data"
-    # args.eval_interval = 10
-    # args.unsupervised_initial_sample_rate = 0.01
-    # # args.unsupervised_weight_gr = 0.1
-    # args.batch_size = 4
-    # args.num_workers = 1
-    # args.points_per_batch = 32
-    # args.unsupervised_start_epoch = 1
-    # args.unsupervised_sample_rate_delta = 0.01
-    # args.unsupervised_metric_delta_threshold = 0.01
-    # args.stability_score_thresh = 0.80
-    # args.pred_iou_thresh = 0.75
-    # args.unsupervised_focused_metric = "Overall/dice"
+    args.data_root = "/Users/zhaojq/Datasets/ALL_Multi"
+    args.test_size = 0.01
+    args.test_sample_rate = 0.01
+    args.checkpoint = "epoch0077_test-loss0.1181_sam.pth"
+    args.activate_unsupervised = False
+    args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CoNIC/data"
+    args.eval_interval = 10
+    args.unsupervised_initial_sample_rate = 0.01
+    # args.unsupervised_weight_gr = 0.1
+    args.batch_size = 4
+    args.num_workers = 1
+    args.points_per_batch = 32
+    args.unsupervised_start_epoch = 1
+    args.unsupervised_sample_rate_delta = 0.01
+    args.unsupervised_metric_delta_threshold = 0.01
+    args.stability_score_thresh = 0.80
+    args.pred_iou_thresh = 0.75
+    args.unsupervised_focused_metric = "Overall/dice"
 
     main(args)
