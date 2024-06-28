@@ -513,7 +513,7 @@ def main(args):
     global_metrics_dict["Loss/train"] = 0.0
     global_metrics_dict["Loss/test"] = 0.0
 
-    if pseudo_schedular.is_active():
+    if pseudo_schedular is not None and pseudo_schedular.is_active():
         pseudo_schedular.update_metrics(global_metrics_dict)
 
     wandb.log(global_metrics_dict, step=global_step, commit=True)
