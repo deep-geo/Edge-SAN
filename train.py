@@ -548,23 +548,23 @@ if __name__ == '__main__':
     # # args.split_paths = ["/Users/zhaojq/Datasets/SAM_nuclei_preprocessed/ALL2/split.json"]
     # args.checkpoint = "/Users/zhaojq/PycharmProjects/NucleiSAM/pretrain_model/sam_vit_b_01ec64.pth"
 
-    args.data_root = "/Users/zhaojq/Datasets/ALL_Multi"
-    args.test_size = 0.01
-    args.test_sample_rate = 0.01
-    args.checkpoint = "epoch0077_test-loss0.1181_sam.pth"
-    args.activate_unsupervised = False
-    args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CoNIC/data"
-    args.eval_interval = 10
-    args.unsupervised_initial_sample_rate = 0.01
-    # args.unsupervised_weight_gr = 0.1
-    args.batch_size = 4
-    args.num_workers = 1
-    args.points_per_batch = 32
-    args.unsupervised_start_epoch = 1
-    args.unsupervised_sample_rate_delta = 0.01
-    args.unsupervised_metric_delta_threshold = 0.01
-    args.stability_score_thresh = 0.80
-    args.pred_iou_thresh = 0.75
-    args.unsupervised_focused_metric = "Overall/dice"
+    # args.data_root = "/Users/zhaojq/Datasets/ALL_Multi"
+    # args.test_size = 0.01
+    # args.test_sample_rate = 0.01
+    # args.checkpoint = "epoch0077_test-loss0.1181_sam.pth"
+    # args.activate_unsupervised = False
+    # args.unsupervised_dir = "/Users/zhaojq/Datasets/ALL_Multi/CoNIC/data"
+    # args.eval_interval = 10
+    # args.unsupervised_initial_sample_rate = 0.01
+    # # args.unsupervised_weight_gr = 0.1
+    # args.batch_size = 4
+    # args.num_workers = 1
+    # args.points_per_batch = 32
+    # args.unsupervised_start_epoch = 1
+    # args.unsupervised_sample_rate_delta = 0.01
+    # args.unsupervised_metric_delta_threshold = 0.01
+    # args.stability_score_thresh = 0.80
+    # args.pred_iou_thresh = 0.75
+    # args.unsupervised_focused_metric = "Overall/dice"
 
     main(args)
