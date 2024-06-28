@@ -87,16 +87,48 @@ def get_boxes_from_mask(mask, box_num=1, std = 0.1, max_pixel = 5):
     return torch.as_tensor(noise_boxes, dtype=torch.float)
 
 
-def get_edge_points_from_mask(mask_val: int, mask: np.ndarray, point_num=3):
+def get_random_edge_points(mask_val: int, mask: np.ndarray, point_num: int):
+    mask_vals = np.unique(mask)
+    if mask_val not in mask_vals:
+        points = [(0, 0) for _ in range(point_num)]
+    else:
+        mask_copy = mask.copy()
+        mask_copy[mask != mask_val] = 0
+        mask_copy[mask == mask_val] = 255
+        edges = cv2.Canny(mask_copy.astype(np.uint8), 100, 200)
+        contours, _ = cv2.findContours(edges, cv2.RETR_TREE,
+                                       cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            points = [(0, 0) for _ in range(point_num)]
+        else:
+            contour_points = contours[0].squeeze(1).tolist()
+            points = random.choices(contour_points, k=point_num)
 
+    mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+    for x, y in points:
+        cv2.circle(mask, (x, y), 2, (0, 0, 255), -1)
+
+    # cv2.imshow("mask", mask)
+    # cv2.imshow("msk_copy", mask_copy)
+    # cv2.waitKey(0)
+
+    return points
+
+
+def get_edge_points_from_mask(mask_val: int, mask: np.ndarray, point_num=3):
+    # count["total"] += 1
     # for test
     # img = mask / mask.max() * 255
     # img = img.astype(np.uint8)
     # img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    mask_vals = np.unique(mask)
+    if len(mask_vals) == 1:
+        points = [(0, 0) for _ in range(point_num)]
+        return points
 
-    other_mask_vals = [val for val in np.unique(mask) if val != 0 and val != mask_val]
+    other_mask_vals = [val for val in mask_vals if val != 0 and val != mask_val]
     if not other_mask_vals:
-        edge_points_list = []
+        points = get_random_edge_points(mask_val, mask, point_num)
     else:
         current_mask = (mask == mask_val).astype(np.uint8)
         kernel = np.ones((3, 3), np.uint8)
@@ -115,11 +147,11 @@ def get_edge_points_from_mask(mask_val: int, mask: np.ndarray, point_num=3):
             if len(coords) >= point_num:
                 edge_points_list.append(coords)
 
-    if not edge_points_list:
-        points = [(0, 0) for _ in range(point_num)]
-    else:
-        random_points = random.choice(edge_points_list)
-        points = random.choices(random_points, k=point_num)
+        if not edge_points_list:
+            points = get_random_edge_points(mask_val, mask, point_num)
+        else:
+            random_points = random.choice(edge_points_list)
+            points = random.choices(random_points, k=point_num)
 
     # for test
     # if (sum(np.array(points)) > 0).any():

@@ -550,7 +550,7 @@ if __name__ == '__main__':
 
     # args.data_root = "/Users/zhaojq/Datasets/ALL_Multi"
     # args.test_size = 0.01
-    # args.edge_point_num = 1
+    # args.edge_point_num = 3
     # args.test_sample_rate = 0.01
     # args.checkpoint = "epoch0077_test-loss0.1181_sam.pth"
     # args.activate_unsupervised = False
