@@ -109,11 +109,13 @@ class TestingDataset(Dataset):
         augments = transforms(image=image, mask=binary_mask)
         image, mask = augments['image'], augments['mask'].to(torch.int64)
 
+        edge_point_coords = None
         if self.prompt_path is None:
             boxes = get_boxes_from_mask(mask, max_pixel=0)
             point_coords, point_labels = init_point_sampling(mask, self.point_num)
-            edge_point_coords = get_edge_points_from_mask(mask_val, ori_np_mask,
-                                                          self.edge_point_num)
+            if self.edge_point_num:
+                edge_point_coords = get_edge_points_from_mask(mask_val, ori_np_mask,
+                                                              self.edge_point_num)
         else:
             prompt_key = mask_path.split('/')[-1]
             boxes = torch.as_tensor(
@@ -122,15 +124,17 @@ class TestingDataset(Dataset):
                 self.prompt_list[prompt_key]["point_coords"], dtype=torch.float)
             point_labels = torch.as_tensor(
                 self.prompt_list[prompt_key]["point_labels"], dtype=torch.int)
-            edge_point_coords = torch.as_tensor(
-                self.prompt_list[prompt_key]["edges"], dtype=torch.float)
+            if self.edge_point_num:
+                edge_point_coords = torch.as_tensor(
+                    self.prompt_list[prompt_key]["edges"], dtype=torch.float)
 
         image_input["image"] = image
         image_input["label"] = mask.unsqueeze(0)
         image_input["point_coords"] = point_coords
         image_input["point_labels"] = point_labels
         image_input["boxes"] = boxes
-        image_input["edges"] = edge_point_coords
+        if edge_point_coords is not None:
+            image_input["edges"] = edge_point_coords
         image_input["original_size"] = (h, w)
         image_input["image_path"] = image_path
         image_input["label_path"] = '/'.join(mask_path.split('/')[:-1])
@@ -257,27 +261,32 @@ class TrainingDataset(Dataset):
                 boxes = get_boxes_from_mask(mask_tensor)
                 point_coords, point_label = init_point_sampling(
                     mask_tensor,  self.point_num)
-                edge_point_coords = get_edge_points_from_mask(
-                    mask_val, original_mask, self.edge_point_num)
 
                 masks_list.append(mask_tensor)
                 boxes_list.append(boxes)
                 point_coords_list.append(point_coords)
                 point_labels_list.append(point_label)
-                edge_point_coords_list.append(edge_point_coords)
+                if self.edge_point_num:
+                    edge_point_coords = get_edge_points_from_mask(
+                        mask_val, original_mask, self.edge_point_num)
+                    edge_point_coords_list.append(edge_point_coords)
 
             mask = torch.stack(masks_list, dim=0)
             boxes = torch.stack(boxes_list, dim=0)
             point_coords = torch.stack(point_coords_list, dim=0)
             point_labels = torch.stack(point_labels_list, dim=0)
-            edges = torch.stack(edge_point_coords_list, dim=0)
+            if edge_point_coords_list:
+                edges = torch.stack(edge_point_coords_list, dim=0)
+            else:
+                edges = None
 
             image_input["image"] = image_tensor.unsqueeze(0)
             image_input["label"] = mask.unsqueeze(1)
             image_input["boxes"] = boxes
             image_input["point_coords"] = point_coords
             image_input["point_labels"] = point_labels
-            image_input["edges"] = edges
+            if edges is not None:
+                image_input["edges"] = edges
             image_input["image_path"] = image_path
             image_input["pseudo"] = self.pseudos[index]
             image_input["dataset_name"] = os.path.basename(
