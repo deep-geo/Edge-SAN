@@ -60,12 +60,7 @@ class PreprocessLizard(Preprocess):
             print(f"\nProcess {split} data...")
             for src_data_path in tqdm.tqdm(src_data_paths):
                 img = cv2.imread(src_data_path)
-                dst_img = self.transform(img)
-                dst_data_path = os.path.join(
-                    self.dst_data_dir,
-                    self.dst_prefix + os.path.basename(src_data_path)
-                )
-                cv2.imwrite(dst_data_path, dst_img)
+                self.save_data(ori_data=img, data_name=os.path.basename(src_data_path)[:-4])
 
             # label
             src_label_dir = os.path.join(self.src_root, split, "label")    # bound, not label
@@ -81,26 +76,27 @@ class PreprocessLizard(Preprocess):
                 _, sure_fg = cv2.threshold(dist_transform, 0, 255, 0)
                 sure_fg = np.uint8(sure_fg)
                 _, markers = cv2.connectedComponents(sure_fg)
+                self.save_label(ori_label=markers, label_name=os.path.basename(path)[:-4])
 
-                vals = [val for val in np.unique(markers) if val != 0]
-                random.shuffle(vals)
-
-                val_groups = [vals[i:i + 255] for i in range(0, len(vals), 255)]
-                for i, group in enumerate(val_groups):
-                    step = self.calc_step(len(group))
-                    dst_label = np.zeros(shape=label.shape, dtype=np.uint8)
-                    for j, val in enumerate(group):
-                        dst_label[markers == val] = 255 - j * step
-
-                    dst_label = self.transform(dst_label)
-
-                    if i == 0:
-                        label_name = self.dst_prefix + basename
-                    else:
-                        label_name = self.dst_prefix + f"{basename[:-4]}({i}).png"
-
-                    dst_path = os.path.join(self.dst_label_dir, label_name)
-                    cv2.imwrite(dst_path, dst_label)
+                # vals = [val for val in np.unique(markers) if val != 0]
+                # random.shuffle(vals)
+                #
+                # val_groups = [vals[i:i + 255] for i in range(0, len(vals), 255)]
+                # for i, group in enumerate(val_groups):
+                #     step = self.calc_step(len(group))
+                #     dst_label = np.zeros(shape=label.shape, dtype=np.uint8)
+                #     for j, val in enumerate(group):
+                #         dst_label[markers == val] = 255 - j * step
+                #
+                #     dst_label = self.transform(dst_label)
+                #
+                #     if i == 0:
+                #         label_name = self.dst_prefix + basename
+                #     else:
+                #         label_name = self.dst_prefix + f"{basename[:-4]}({i}).png"
+                #
+                #     dst_path = os.path.join(self.dst_label_dir, label_name)
+                #     cv2.imwrite(dst_path, dst_label)
 
 
 if __name__ == "__main__":
